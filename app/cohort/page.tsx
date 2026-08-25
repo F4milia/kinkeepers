@@ -15,7 +15,12 @@ export default function CohortPage() {
   const members = getCohortMembers(viewer.cohortId);
 
   if (!cohort || members.length === 0) {
-    return <EmptyState headline={COPY.cohort.title} body={COPY.cohort.empty} />;
+    return (
+      <div className="flex flex-col gap-section">
+        <h1 className="sr-only">{COPY.cohort.title}</h1>
+        <EmptyState headline={COPY.cohort.title} body={COPY.cohort.empty} />
+      </div>
+    );
   }
 
   const roster = [...members].sort((a, b) => {

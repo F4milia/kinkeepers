@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { COPY } from "@/lib/copy";
 import { THEME_COOKIE, THEME_COOKIE_MAX_AGE, type Theme } from "@/lib/theme";
 
 export function ThemeToggle({ initialTheme }: { initialTheme: Theme }) {
@@ -31,7 +32,7 @@ export function ThemeToggle({ initialTheme }: { initialTheme: Theme }) {
           theme === "light" ? "bg-action-dim text-action" : "bg-surface text-ink-soft"
         }`}
       >
-        Light
+        {COPY.theme.light}
       </button>
       <button
         type="button"
@@ -41,7 +42,7 @@ export function ThemeToggle({ initialTheme }: { initialTheme: Theme }) {
           theme === "dark" ? "bg-action-dim text-action" : "bg-surface text-ink-soft"
         }`}
       >
-        Dark
+        {COPY.theme.dark}
       </button>
     </div>
   );

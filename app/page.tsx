@@ -43,7 +43,7 @@ export default async function HomePage() {
             {upcomingSession.deliveryFormat === "video" ? COPY.session.location_video : COPY.session.location_person}
           </Badge>
 
-          <Button variant="primary" className="w-full">
+          <Button variant="primary" className="w-full" disabled>
             {upcomingSession.deliveryFormat === "video" ? COPY.home.join_video : COPY.home.get_directions}
           </Button>
 

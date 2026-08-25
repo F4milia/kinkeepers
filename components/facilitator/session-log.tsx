@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AttendanceRadioGroup, type AttendanceStatus } from "@/components/ui/attendance-radio-group";
 import { Avatar } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -30,6 +30,12 @@ interface EditEntry {
   changes: EditChange[];
 }
 
+interface LogDraft {
+  attendance: Record<string, AttendanceStatus>;
+  notes: string;
+  deliveryConfirmed: boolean;
+}
+
 export interface FacilitatorSessionLogProps {
   session: Session;
   members: CohortMember[];
@@ -57,17 +63,55 @@ function seedAttendance(session: Session, members: CohortMember[]): Record<strin
 // replaced.
 export function FacilitatorSessionLog({ session, members, facilitatorName }: FacilitatorSessionLogProps) {
   const roster = [...members].sort((a, b) => (a.role === b.role ? 0 : a.role === "facilitator" ? -1 : 1));
+  const draftKey = `kk-draft-log-${session.id}`;
 
   const [attendance, setAttendance] = useState(() => seedAttendance(session, roster));
   const [savedAttendance, setSavedAttendance] = useState(() => seedAttendance(session, roster));
   const [notes, setNotes] = useState(session.notes ?? "");
   const [savedNotes, setSavedNotes] = useState(session.notes ?? "");
   const [deliveryConfirmed, setDeliveryConfirmed] = useState(session.deliveryConfirmed ?? false);
+  const [savedDeliveryConfirmed, setSavedDeliveryConfirmed] = useState(session.deliveryConfirmed ?? false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [submission, setSubmission] = useState(
     session.loggedBy && session.loggedDate ? { by: session.loggedBy, date: session.loggedDate } : null,
   );
   const [edits, setEdits] = useState<EditEntry[]>([]);
+  const hydrated = useRef(false);
+
+  // Facilitator log carries unsaved attendance marks and notes across a
+  // reload or a closed tab, the same way the discussion composer does —
+  // this is the form where losing unsaved work costs the most (CLAUDE.md
+  // "every form saves drafts").
+  useEffect(() => {
+    const saved = window.localStorage.getItem(draftKey);
+    if (saved) {
+      try {
+        const draft = JSON.parse(saved) as LogDraft;
+        setAttendance(draft.attendance);
+        setNotes(draft.notes);
+        setDeliveryConfirmed(draft.deliveryConfirmed);
+      } catch {
+        window.localStorage.removeItem(draftKey);
+      }
+    }
+    hydrated.current = true;
+  }, [draftKey]);
+
+  useEffect(() => {
+    if (!hydrated.current) return;
+    const dirty =
+      notes !== savedNotes ||
+      deliveryConfirmed !== savedDeliveryConfirmed ||
+      roster.some((member) => attendance[member.id] !== savedAttendance[member.id]);
+
+    if (dirty) {
+      const draft: LogDraft = { attendance, notes, deliveryConfirmed };
+      window.localStorage.setItem(draftKey, JSON.stringify(draft));
+    } else {
+      window.localStorage.removeItem(draftKey);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [attendance, notes, deliveryConfirmed, draftKey]);
 
   const unmarkedCount = roster.filter((member) => attendance[member.id] === "unmarked").length;
 
@@ -94,7 +138,9 @@ export function FacilitatorSessionLog({ session, members, facilitatorName }: Fac
 
     setSavedAttendance(attendance);
     setSavedNotes(notes);
+    setSavedDeliveryConfirmed(deliveryConfirmed);
     setConfirmOpen(false);
+    window.localStorage.removeItem(draftKey);
   }
 
   return (

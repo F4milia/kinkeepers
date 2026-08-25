@@ -66,7 +66,7 @@ export function SessionDetail({ session }: SessionDetailProps) {
           </div>
         ) : (
           <div className="flex flex-col items-start gap-3">
-            <Button variant="primary" className="w-full">
+            <Button variant="primary" className="w-full" disabled>
               {session.deliveryFormat === "video" ? COPY.home.join_video : COPY.home.get_directions}
             </Button>
             <Button variant="quiet" className="w-fit" onClick={() => setMarkedAbsent(true)}>
