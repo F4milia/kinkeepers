@@ -50,6 +50,10 @@ export function getUpcomingSession(cohortId: string): Session | undefined {
   return getSessions(cohortId).find((session) => session.status === "upcoming");
 }
 
+export function getSession(sessionId: string): Session | undefined {
+  return sessions.find((session) => session.id === sessionId);
+}
+
 export function getPosts(cohortId: string): Post[] {
   return posts
     .filter((post) => post.cohortId === cohortId)

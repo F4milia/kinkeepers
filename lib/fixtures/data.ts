@@ -65,6 +65,21 @@ export const sessions: Session[] = [
     topic: null,
     materialsCount: 0,
     attendance: { present: 8, absent: 1, excused: 1 },
+    // Per-member marks consistent with the aggregate counts above — Part 3.2
+    // gives only the totals, so this distribution is ours, not sourced content.
+    attendanceByMember: {
+      "member-001": "present", // Denise (facilitator)
+      "member-002": "present", // Rosalind
+      "member-003": "present", // Terry
+      "member-004": "present", // Paul
+      "member-005": "absent", // Hector
+      "member-006": "present", // Marilyn
+      "member-007": "excused", // Curtis
+      "member-008": "present", // Yvonne
+      "member-009": "present", // Bernadette
+      "member-010": "present", // Arthur
+    },
+    deliveryConfirmed: true,
     loggedBy: "Denise",
     loggedDate: "2026-08-18",
   },
@@ -82,6 +97,19 @@ export const sessions: Session[] = [
     topic: null,
     materialsCount: 0,
     attendance: { present: 9, absent: 0, excused: 1 },
+    attendanceByMember: {
+      "member-001": "present", // Denise (facilitator)
+      "member-002": "present", // Rosalind
+      "member-003": "present", // Terry
+      "member-004": "present", // Paul
+      "member-005": "present", // Hector
+      "member-006": "present", // Marilyn
+      "member-007": "present", // Curtis
+      "member-008": "excused", // Yvonne
+      "member-009": "present", // Bernadette
+      "member-010": "present", // Arthur
+    },
+    deliveryConfirmed: true,
     loggedBy: "Denise",
     loggedDate: "2026-08-11",
   },

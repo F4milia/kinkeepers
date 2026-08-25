@@ -32,12 +32,12 @@ export default async function HomePage() {
 
       {upcomingSession ? (
         <Card className="flex flex-col items-start gap-4">
-          <div>
+          <Link href={`/session/${upcomingSession.id}`} className="-m-1 block rounded-control p-1 transition-colors hover:text-action">
             <p className="text-h2 font-heading">{formatSessionDay(upcomingSession.date)}</p>
             <p className="mt-1 text-body-lg font-ui text-ink-soft">
               {upcomingSession.time} {upcomingSession.timeZoneLabel}
             </p>
-          </div>
+          </Link>
 
           <Badge variant="neutral">
             {upcomingSession.deliveryFormat === "video" ? COPY.session.location_video : COPY.session.location_person}

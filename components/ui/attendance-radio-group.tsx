@@ -1,8 +1,9 @@
 "use client";
 
 import { COPY } from "@/lib/copy";
+import type { AttendanceStatus } from "@/lib/fixtures";
 
-export type AttendanceStatus = "present" | "absent" | "excused" | "unmarked";
+export type { AttendanceStatus };
 
 const OPTIONS: { value: AttendanceStatus; label: string }[] = [
   { value: "present", label: COPY.log.present },

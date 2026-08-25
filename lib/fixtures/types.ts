@@ -22,6 +22,9 @@ export interface Cohort {
   deliveryFormat: DeliveryFormat;
 }
 
+/** Three-state attendance mark plus the explicit "not yet marked" state — never implied by a default. */
+export type AttendanceStatus = "present" | "absent" | "excused" | "unmarked";
+
 export type MemberRole = "member" | "facilitator";
 
 export interface CohortMember {
@@ -67,6 +70,12 @@ export interface Session {
   attendingCount?: number;
   /** Set on past sessions. */
   attendance?: SessionAttendance;
+  /** Facilitator log: per-member attendance, keyed by CohortMember id. Absent (undefined) means every member starts unmarked. */
+  attendanceByMember?: Record<string, AttendanceStatus>;
+  /** Facilitator log: free-text notes as last submitted. Undefined until a log is submitted. */
+  notes?: string;
+  /** Facilitator log: whether "confirm this session took place" has been checked and submitted. */
+  deliveryConfirmed?: boolean;
   loggedBy?: string;
   loggedDate?: string;
 }
