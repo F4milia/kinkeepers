@@ -28,7 +28,7 @@ export function ThemeToggle({ initialTheme }: { initialTheme: Theme }) {
         type="button"
         aria-pressed={theme === "light"}
         onClick={() => apply("light")}
-        className={`min-h-12 min-w-12 px-4 text-label font-ui transition-colors ${
+        className={`min-h-12 min-w-12 px-3 text-label font-ui transition-colors ${
           theme === "light" ? "bg-action-dim text-action" : "bg-surface text-ink-soft"
         }`}
       >
@@ -38,7 +38,7 @@ export function ThemeToggle({ initialTheme }: { initialTheme: Theme }) {
         type="button"
         aria-pressed={theme === "dark"}
         onClick={() => apply("dark")}
-        className={`min-h-12 min-w-12 border-l border-line px-4 text-label font-ui transition-colors ${
+        className={`min-h-12 min-w-12 border-l border-line px-3 text-label font-ui transition-colors ${
           theme === "dark" ? "bg-action-dim text-action" : "bg-surface text-ink-soft"
         }`}
       >

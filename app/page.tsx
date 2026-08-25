@@ -1,34 +1,25 @@
 import Link from "next/link";
-import { cookies } from "next/headers";
-import { ThemeToggle } from "@/components/theme-toggle";
 import { JoinAction } from "@/components/session/join-action";
+import { DeliveryBadge } from "@/components/session/delivery-badge";
 import { Card } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Avatar } from "@/components/ui/avatar";
 import { EmptyState } from "@/components/ui/empty-state";
 import { COPY, format } from "@/lib/copy";
 import { getPosts, getUpcomingSession, getViewer } from "@/lib/data";
 import { formatRelativeDays, formatSessionDay } from "@/lib/format-date";
-import { THEME_COOKIE, isTheme, type Theme } from "@/lib/theme";
 
-// Home | Part 3.4: greeting + theme toggle, next-meeting card with one
-// primary action, program position, up to two recent posts, quiet link to
-// discussion. One primary action on this screen: the meeting action.
-export default async function HomePage() {
-  const cookieStore = await cookies();
-  const cookieTheme = cookieStore.get(THEME_COOKIE)?.value;
-  const initialTheme: Theme = isTheme(cookieTheme) ? cookieTheme : "light";
-
+// Home | Part 3.4: greeting, next-meeting card with one primary action,
+// program position, up to two recent posts, quiet link to discussion. One
+// primary action on this screen: the meeting action. The theme toggle moved
+// to the app header so it's available on every screen, not just here.
+export default function HomePage() {
   const viewer = getViewer();
   const upcomingSession = getUpcomingSession(viewer.cohortId);
   const recentPosts = getPosts(viewer.cohortId).slice(0, 2);
 
   return (
     <div className="flex flex-col gap-section">
-      <div className="flex items-center justify-between gap-4">
-        <h1 className="text-h2">{format(COPY.home.greeting, { firstName: viewer.firstName })}</h1>
-        <ThemeToggle initialTheme={initialTheme} />
-      </div>
+      <h1 className="text-h2">{format(COPY.home.greeting, { firstName: viewer.firstName })}</h1>
 
       {upcomingSession ? (
         <Card className="flex flex-col items-start gap-4">
@@ -39,9 +30,7 @@ export default async function HomePage() {
             </p>
           </Link>
 
-          <Badge variant="neutral">
-            {upcomingSession.deliveryFormat === "video" ? COPY.session.location_video : COPY.session.location_person}
-          </Badge>
+          <DeliveryBadge format={upcomingSession.deliveryFormat} />
 
           <JoinAction session={upcomingSession} className="w-full" />
 

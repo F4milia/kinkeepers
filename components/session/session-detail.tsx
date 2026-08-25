@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { JoinAction } from "@/components/session/join-action";
+import { DeliveryBadge } from "@/components/session/delivery-badge";
 import { COPY, format } from "@/lib/copy";
 import { formatSessionDay, formatSessionTimeRange } from "@/lib/format-date";
 import type { Session } from "@/lib/fixtures";
@@ -34,9 +35,7 @@ export function SessionDetail({ session }: SessionDetailProps) {
       </div>
 
       <div className="self-start">
-        <Badge variant="neutral">
-          {session.deliveryFormat === "video" ? COPY.session.location_video : COPY.session.location_person}
-        </Badge>
+        <DeliveryBadge format={session.deliveryFormat} />
       </div>
 
       {typeof attendingCount === "number" && (

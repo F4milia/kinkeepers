@@ -42,7 +42,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
       </head>
       <body>
-        <AppShell>{children}</AppShell>
+        <AppShell theme={theme}>{children}</AppShell>
       </body>
     </html>
   );
