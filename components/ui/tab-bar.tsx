@@ -8,7 +8,6 @@ const ITEMS = [
   { href: "/", label: COPY.nav.home },
   { href: "/cohort", label: COPY.nav.cohort },
   { href: "/discussion", label: COPY.nav.discussion },
-  { href: "/support", label: COPY.nav.support },
 ];
 
 // TabBar | mobile bottom bar, desktop left rail · active, focus. Active state

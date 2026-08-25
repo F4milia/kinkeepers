@@ -1,64 +1,107 @@
-import { ThemeToggle } from "@/components/theme-toggle";
+import Link from "next/link";
 import { cookies } from "next/headers";
-import { isTheme, type Theme } from "@/lib/theme";
-import { THEME_COOKIE } from "@/lib/theme";
+import { ThemeToggle } from "@/components/theme-toggle";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Avatar } from "@/components/ui/avatar";
+import { EmptyState } from "@/components/ui/empty-state";
+import { COPY, format } from "@/lib/copy";
+import { getPosts, getUpcomingSession, getViewer } from "@/lib/data";
+import { formatRelativeDays, formatSessionDay } from "@/lib/format-date";
+import { THEME_COOKIE, isTheme, type Theme } from "@/lib/theme";
 
-const colorTokens = [
-  "ink",
-  "ink-soft",
-  "canvas",
-  "surface",
-  "line",
-  "action",
-  "action-dim",
-  "urgent",
-  "gentle",
-] as const;
-
-/**
- * Scaffold verification only — this is not the Home screen. Part 4, Session
- * 0 explicitly says not to build screens yet. This page exists so
- * `npm run build` + a manual look confirms fonts, type tokens, and dark
- * mode are wired correctly before any screen gets built on top of them.
- */
-export default async function TokenCheckPage() {
+// Home | Part 3.4: greeting + theme toggle, next-meeting card with one
+// primary action, program position, up to two recent posts, quiet link to
+// discussion. One primary action on this screen: the meeting action.
+export default async function HomePage() {
   const cookieStore = await cookies();
   const cookieTheme = cookieStore.get(THEME_COOKIE)?.value;
   const initialTheme: Theme = isTheme(cookieTheme) ? cookieTheme : "light";
 
+  const viewer = getViewer();
+  const upcomingSession = getUpcomingSession(viewer.cohortId);
+  const recentPosts = getPosts(viewer.cohortId).slice(0, 2);
+
   return (
-    <main className="mx-auto max-w-content px-4 py-section">
+    <div className="flex flex-col gap-section">
       <div className="flex items-center justify-between gap-4">
-        <p className="text-meta text-ink-soft font-ui">Scaffold check — not a screen</p>
+        <h1 className="text-h2">{format(COPY.home.greeting, { firstName: viewer.firstName })}</h1>
         <ThemeToggle initialTheme={initialTheme} />
       </div>
 
-      <h1 className="mt-section">Heading in Source Serif 4</h1>
-      <p className="mt-4 text-body font-ui">
-        This paragraph is Atkinson Hyperlegible Next at 18px, the body base size, with the 1.7
-        line height specified for tired and aging readers.
-      </p>
-
-      <h2 className="mt-section">Type scale</h2>
-      <div className="mt-4 flex flex-col gap-4">
-        <p className="text-h1 font-heading">H1 — text-h1 / font-heading</p>
-        <p className="text-h2 font-heading">H2 — text-h2 / font-heading</p>
-        <p className="text-h3 font-heading">H3 — text-h3 / font-heading</p>
-        <p className="text-body-lg font-ui">Body large — text-body-lg / font-ui</p>
-        <p className="text-body font-ui">Body — text-body / font-ui</p>
-        <p className="text-label font-ui">Label — text-label / font-ui</p>
-        <p className="text-meta font-ui">Meta — text-meta / font-ui</p>
-      </div>
-
-      <h2 className="mt-section">Color tokens</h2>
-      <div className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-3">
-        {colorTokens.map((token) => (
-          <div key={token} className="rounded-card border border-line bg-surface">
-            <div className="h-16 rounded-t-card" style={{ background: `var(--${token})` }} />
-            <p className="p-2 text-meta font-ui text-ink-soft">--{token}</p>
+      {upcomingSession ? (
+        <Card className="flex flex-col items-start gap-4">
+          <div>
+            <p className="text-h2 font-heading">{formatSessionDay(upcomingSession.date)}</p>
+            <p className="mt-1 text-body-lg font-ui text-ink-soft">
+              {upcomingSession.time} {upcomingSession.timeZoneLabel}
+            </p>
           </div>
-        ))}
-      </div>
-    </main>
+
+          <Badge variant="neutral">
+            {upcomingSession.deliveryFormat === "video" ? COPY.session.location_video : COPY.session.location_person}
+          </Badge>
+
+          <Button variant="primary" className="w-full">
+            {upcomingSession.deliveryFormat === "video" ? COPY.home.join_video : COPY.home.get_directions}
+          </Button>
+
+          <Button variant="quiet">{COPY.home.cant_attend}</Button>
+
+          <p className="text-meta font-ui text-ink-soft">
+            {format(COPY.home.progress, {
+              n: upcomingSession.sessionNumber,
+              total: upcomingSession.sessionTotal,
+            })}
+          </p>
+        </Card>
+      ) : (
+        <Card>
+          <EmptyState headline={COPY.home.next_meetup} body={COPY.home.empty_meetup} />
+        </Card>
+      )}
+
+      <section aria-labelledby="recent-heading" className="flex flex-col gap-3">
+        <h2 id="recent-heading" className="text-h3">
+          {COPY.home.recent}
+        </h2>
+
+        {recentPosts.length > 0 ? (
+          <>
+            <div className="flex flex-col gap-3">
+              {recentPosts.map((post) => (
+                <Card key={post.id} interactive href="/discussion">
+                  <div className="flex items-center gap-3">
+                    <Avatar name={post.authorFirstName} />
+                    <div>
+                      <p className="text-label font-ui text-ink">{post.authorFirstName}</p>
+                      <p className="text-meta font-ui text-ink-soft">{formatRelativeDays(post.createdAt)}</p>
+                    </div>
+                  </div>
+                  <p className="mt-3 line-clamp-3 text-body font-ui text-ink">{post.body}</p>
+                  {post.replies.length > 0 && (
+                    <p className="mt-2 text-meta font-ui text-ink-soft">
+                      {post.replies.length === 1
+                        ? COPY.discussion.replies_one
+                        : format(COPY.discussion.replies_many, { n: post.replies.length })}
+                    </p>
+                  )}
+                </Card>
+              ))}
+            </div>
+
+            <Link
+              href="/discussion"
+              className="inline-flex min-h-12 w-fit items-center rounded-control px-4 text-label font-ui text-action hover:bg-action-dim active:bg-action-dim"
+            >
+              {COPY.home.view_all}
+            </Link>
+          </>
+        ) : (
+          <p className="text-body font-ui text-ink-soft">{COPY.home.empty_posts}</p>
+        )}
+      </section>
+    </div>
   );
 }

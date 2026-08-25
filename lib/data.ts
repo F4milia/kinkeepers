@@ -17,6 +17,15 @@ import {
   type Session,
 } from "./fixtures";
 
+/** The signed-in caregiver Home and other member-facing screens render from — a member, not the facilitator. */
+const VIEWER_MEMBER_ID = "member-002";
+
+export function getViewer(): CohortMember {
+  const viewer = cohortMembers.find((member) => member.id === VIEWER_MEMBER_ID);
+  if (!viewer) throw new Error(`Viewer fixture ${VIEWER_MEMBER_ID} not found`);
+  return viewer;
+}
+
 export function getCohort(cohortId: string): Cohort | undefined {
   return cohorts.find((cohort) => cohort.id === cohortId);
 }

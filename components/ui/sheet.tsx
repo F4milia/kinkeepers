@@ -52,7 +52,7 @@ export function Sheet({ open, onClose, title, children, hideCloseButton = false 
         if (event.target === dialogRef.current) onClose();
       }}
       aria-labelledby={titleId}
-      className="m-0 w-full max-w-content border-t border-line bg-surface p-0 text-ink backdrop:bg-ink/40 open:fixed open:inset-x-0 open:bottom-0 open:rounded-t-card md:open:inset-0 md:open:m-auto md:open:h-fit md:open:max-h-[85vh] md:open:rounded-card md:open:border"
+      className="m-0 w-full max-w-content border-t border-line bg-surface p-0 text-ink backdrop:bg-ink/40 open:fixed open:inset-x-0 open:top-auto open:bottom-0 open:rounded-t-card md:open:inset-0 md:open:m-auto md:open:h-fit md:open:max-h-[85vh] md:open:rounded-card md:open:border"
     >
       <div className="flex max-h-[85vh] flex-col overflow-y-auto p-6">
         <div className="flex items-center justify-between gap-4">
