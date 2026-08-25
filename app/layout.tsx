@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import { cookies } from "next/headers";
 import { Atkinson_Hyperlegible_Next, Source_Serif_4 } from "next/font/google";
 import { THEME_COOKIE, isTheme, themeInitScript, type Theme } from "@/lib/theme";
-import { DEV_VIEW_COOKIE, isDevView, type DevView } from "@/lib/dev-view";
 import { AppShell } from "@/components/app-shell";
 import "./globals.css";
 
@@ -31,8 +30,6 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const cookieStore = await cookies();
   const cookieTheme = cookieStore.get(THEME_COOKIE)?.value;
   const theme: Theme = isTheme(cookieTheme) ? cookieTheme : "light";
-  const cookieDevView = cookieStore.get(DEV_VIEW_COOKIE)?.value;
-  const devView: DevView = isDevView(cookieDevView) ? cookieDevView : "caregiver";
 
   return (
     <html
@@ -45,7 +42,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
       </head>
       <body>
-        <AppShell initialDevView={devView}>{children}</AppShell>
+        <AppShell>{children}</AppShell>
       </body>
     </html>
   );

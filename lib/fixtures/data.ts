@@ -48,6 +48,10 @@ export const sessions: Session[] = [
     durationMinutes: 120,
     deliveryFormat: "video",
     topic: null,
+    // Placeholder meeting id (all zeros) — resolves to Zoom's "invalid
+    // meeting" page rather than a stranger's real call, the same reasoning
+    // as the 555-01XX support number in Part 3.1.
+    joinUrl: "https://zoom.us/j/0000000000",
     materialsCount: 1,
     attendingCount: 7,
   },
@@ -63,6 +67,7 @@ export const sessions: Session[] = [
     durationMinutes: 120,
     deliveryFormat: "video",
     topic: null,
+    joinUrl: null,
     materialsCount: 0,
     attendance: { present: 8, absent: 1, excused: 1 },
     // Per-member marks consistent with the aggregate counts above — Part 3.2
@@ -95,6 +100,7 @@ export const sessions: Session[] = [
     durationMinutes: 120,
     deliveryFormat: "video",
     topic: null,
+    joinUrl: null,
     materialsCount: 0,
     attendance: { present: 9, absent: 0, excused: 1 },
     attendanceByMember: {

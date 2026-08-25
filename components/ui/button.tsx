@@ -27,6 +27,19 @@ const SIZE_STYLES: Record<ButtonVariant, string> = {
   destructive: "min-h-12 px-5",
 };
 
+const BASE =
+  "inline-flex items-center justify-center gap-2 rounded-control text-label font-ui transition-colors";
+
+/**
+ * The exact classes Button renders for a variant. Exported so an <a> that
+ * acts as a primary action (a real navigation, e.g. joining a video call)
+ * can match a Button pixel for pixel without duplicating the strings — a
+ * link and a button must never drift apart visually.
+ */
+export function buttonClasses(variant: ButtonVariant): string {
+  return `${BASE} ${VARIANT_STYLES[variant]} ${SIZE_STYLES[variant]}`;
+}
+
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: ButtonVariant;
   loading?: boolean;
@@ -46,7 +59,7 @@ export function Button({
       type={type}
       disabled={disabled || loading}
       aria-busy={loading || undefined}
-      className={`inline-flex items-center justify-center gap-2 rounded-control text-label font-ui transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${VARIANT_STYLES[variant]} ${SIZE_STYLES[variant]} ${className}`}
+      className={`${buttonClasses(variant)} disabled:cursor-not-allowed disabled:opacity-50 ${className}`}
       {...rest}
     >
       {loading ? COPY.loading : children}

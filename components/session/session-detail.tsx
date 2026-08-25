@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { JoinAction } from "@/components/session/join-action";
 import { COPY, format } from "@/lib/copy";
 import { formatSessionDay, formatSessionTimeRange } from "@/lib/format-date";
 import type { Session } from "@/lib/fixtures";
@@ -66,9 +67,7 @@ export function SessionDetail({ session }: SessionDetailProps) {
           </div>
         ) : (
           <div className="flex flex-col items-start gap-3">
-            <Button variant="primary" className="w-full" disabled>
-              {session.deliveryFormat === "video" ? COPY.home.join_video : COPY.home.get_directions}
-            </Button>
+            <JoinAction session={session} className="w-full" />
             <Button variant="quiet" className="w-fit" onClick={() => setMarkedAbsent(true)}>
               {COPY.session.mark_absent}
             </Button>

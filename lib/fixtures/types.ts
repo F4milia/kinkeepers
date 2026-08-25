@@ -65,6 +65,12 @@ export interface Session {
    * display — see kinkeepers-frontend-build.md Part 3.2.
    */
   topic: string | null;
+  /**
+   * Where "Join by video" points. Null when there's nothing to join — a past
+   * session, or an upcoming one whose link the facilitator hasn't shared yet.
+   * Video calling is a link out, never built in (Part 5.3).
+   */
+  joinUrl: string | null;
   materialsCount: number;
   /** Set on upcoming sessions; attendance isn't final yet. */
   attendingCount?: number;

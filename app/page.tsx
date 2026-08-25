@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { cookies } from "next/headers";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { Button } from "@/components/ui/button";
+import { JoinAction } from "@/components/session/join-action";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Avatar } from "@/components/ui/avatar";
@@ -43,11 +43,14 @@ export default async function HomePage() {
             {upcomingSession.deliveryFormat === "video" ? COPY.session.location_video : COPY.session.location_person}
           </Badge>
 
-          <Button variant="primary" className="w-full" disabled>
-            {upcomingSession.deliveryFormat === "video" ? COPY.home.join_video : COPY.home.get_directions}
-          </Button>
+          <JoinAction session={upcomingSession} className="w-full" />
 
-          <Button variant="quiet">{COPY.home.cant_attend}</Button>
+          <Link
+            href={`/session/${upcomingSession.id}`}
+            className="inline-flex min-h-12 items-center rounded-control px-4 text-label font-ui text-action hover:bg-action-dim active:bg-action-dim"
+          >
+            {COPY.home.cant_attend}
+          </Link>
 
           <p className="text-meta font-ui text-ink-soft">
             {format(COPY.home.progress, {
