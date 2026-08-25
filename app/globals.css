@@ -1,26 +1,175 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:where(.dark, .dark *));
+
+/*
+ * Design tokens — kinkeepers-frontend-build.md Part 2.
+ * Every color, type, radius, and layout value used anywhere in this app
+ * must trace to a token defined here. No raw hex, no raw px font-size,
+ * outside this file.
+ */
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* Fonts. Loaded via next/font/google in app/layout.tsx; --font-atkinson
+     and --font-source-serif are the runtime variables it defines. */
+  --font-ui: var(--font-atkinson), system-ui, sans-serif;
+  --font-heading: var(--font-source-serif), Georgia, serif;
+
+  /* Color — Part 2.2 */
+  --ink: #1f2421; /* body text */
+  --ink-soft: #4a524c; /* secondary text, still AA at 18px */
+  --canvas: #f4f2ed; /* page, low glare */
+  --surface: #ffffff; /* cards */
+  --line: #d8d5cc; /* borders */
+  --action: #1f5f4b; /* buttons, links, focus */
+  --action-dim: #e8f0ec; /* selected states, avatar backgrounds */
+  --urgent: #8c3a2b; /* 24/7 support path ONLY */
+  --gentle: #b8874a; /* attention without alarm */
+
+  /* Type scale — Part 2.1. Mobile sizes are the default (mobile-first);
+     desktop sizes apply at the md breakpoint (768px) below. */
+  --type-h1-size: 30px;
+  --type-h1-lh: 1.2;
+  --type-h2-size: 24px;
+  --type-h2-lh: 1.25;
+  --type-h3-size: 20px;
+  --type-h3-lh: 1.3;
+  --type-body-lg-size: 19px;
+  --type-body-lg-lh: 1.7;
+  --type-body-size: 18px;
+  --type-body-lh: 1.7;
+  --type-label-size: 16px;
+  --type-label-lh: 1.4;
+  --type-meta-size: 16px;
+  --type-meta-lh: 1.4;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
+@media (min-width: 768px) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --type-h1-size: 40px;
+    --type-h2-size: 30px;
+    --type-h3-size: 22px;
+    --type-body-lg-size: 20px;
+    /* body, label, and meta sizes are the same at desktop and mobile. */
   }
 }
 
+:root.dark {
+  --ink: #ecebe4;
+  --ink-soft: #b7beb8;
+  --canvas: #141815;
+  --surface: #1e2320;
+  --line: #343b36;
+  --action: #6fbf9c;
+  --action-dim: #1b3229;
+  --urgent: #d98b76;
+  --gentle: #d9a968;
+}
+
+@theme inline {
+  /* Color tokens. @theme inline defers to the runtime custom properties
+     above, so bg-canvas / text-ink / etc. follow the .dark class and the
+     desktop media query automatically — no dark: variants needed. */
+  --color-ink: var(--ink);
+  --color-ink-soft: var(--ink-soft);
+  --color-canvas: var(--canvas);
+  --color-surface: var(--surface);
+  --color-line: var(--line);
+  --color-action: var(--action);
+  --color-action-dim: var(--action-dim);
+  --color-urgent: var(--urgent);
+  --color-gentle: var(--gentle);
+
+  --font-ui: var(--font-ui);
+  --font-heading: var(--font-heading);
+
+  /* Type tokens: text-h1, text-h2, ... bundle size + line-height + weight. */
+  --text-h1: var(--type-h1-size);
+  --text-h1--line-height: var(--type-h1-lh);
+  --text-h1--font-weight: 600;
+
+  --text-h2: var(--type-h2-size);
+  --text-h2--line-height: var(--type-h2-lh);
+  --text-h2--font-weight: 600;
+
+  --text-h3: var(--type-h3-size);
+  --text-h3--line-height: var(--type-h3-lh);
+  --text-h3--font-weight: 600;
+
+  --text-body-lg: var(--type-body-lg-size);
+  --text-body-lg--line-height: var(--type-body-lg-lh);
+  --text-body-lg--font-weight: 400;
+
+  --text-body: var(--type-body-size);
+  --text-body--line-height: var(--type-body-lh);
+  --text-body--font-weight: 400;
+
+  --text-label: var(--type-label-size);
+  --text-label--line-height: var(--type-label-lh);
+  --text-label--font-weight: 500;
+
+  --text-meta: var(--type-meta-size);
+  --text-meta--line-height: var(--type-meta-lh);
+  --text-meta--font-weight: 400;
+}
+
+@theme {
+  /* Layout — Part 2.3 */
+  --container-content: 620px; /* single-column max width -> max-w-content */
+  --spacing-section: 40px; /* minimum section gap -> gap-section, mt-section, etc. */
+  --radius-card: 8px; /* -> rounded-card */
+  --radius-control: 6px; /* -> rounded-control */
+}
+
+html,
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--canvas);
+}
+
+body {
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: var(--type-body-size);
+  line-height: var(--type-body-lh);
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--font-heading);
+  font-weight: 600;
+  color: var(--ink);
+}
+
+h1 {
+  font-size: var(--type-h1-size);
+  line-height: var(--type-h1-lh);
+}
+
+h2 {
+  font-size: var(--type-h2-size);
+  line-height: var(--type-h2-lh);
+}
+
+h3 {
+  font-size: var(--type-h3-size);
+  line-height: var(--type-h3-lh);
+}
+
+/* Focus ring everywhere — Part 3.3. Never outline: none without this. */
+:focus-visible {
+  outline: 3px solid var(--action);
+  outline-offset: 2px;
+}
+
+/* Motion — Part 2.3: fades only, 200ms. Reduced motion disables all of it. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
