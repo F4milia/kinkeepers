@@ -9,14 +9,18 @@ const VIEWS: { value: DevView; label: string }[] = [
 ];
 
 /**
- * Demo scaffolding, not a product feature (CLAUDE.md) — flips /session
+ * Demo scaffolding, not a product feature (CLAUDE.md) — flips this session
  * between the caregiver and facilitator views so a presenter can show both
- * without two logins. Deliberately styled outside the design system
- * (monospace, dashed border, raw Tailwind palette instead of tokens) so it
- * reads as a tool, never as part of the product a clinical reviewer is
- * evaluating. This is the one intentional exception to "no raw hex outside
- * the token file" — it exists precisely so it does NOT look like the rest
- * of the app.
+ * without two logins.
+ *
+ * The build doc asks that this stay visibly scaffolding. It does that with a
+ * dashed --gentle outline and a plain label rather than an off-system
+ * palette: a black-and-yellow brutalist bar reads as a defect in a screen
+ * about someone's spouse, and the first audience is a clinical reviewer who
+ * will see it before they see anything else. The dashed edge and the words
+ * "Demo only" carry that signal without the alarm. The segmented control
+ * itself matches ThemeToggle, so the one piece a presenter actually operates
+ * behaves like the rest of the app.
  */
 export function DevViewSwitcher({ initialView }: { initialView: DevView }) {
   const router = useRouter();
@@ -28,19 +32,17 @@ export function DevViewSwitcher({ initialView }: { initialView: DevView }) {
   }
 
   return (
-    <div className="flex flex-wrap items-center gap-3 border-b-2 border-dashed border-neutral-500 bg-neutral-900 px-4 py-2">
-      <span className="font-mono text-meta font-bold uppercase tracking-wide text-neutral-400">
-        Demo only — viewing as
-      </span>
-      <div className="flex overflow-hidden rounded border border-neutral-600" role="group" aria-label="Demo view">
-        {VIEWS.map((view) => (
+    <div className="flex flex-wrap items-center justify-between gap-3 rounded-card border border-dashed border-gentle bg-surface px-4 py-3">
+      <p className="text-meta font-ui text-ink-soft">Demo only — viewing as</p>
+      <div className="inline-flex overflow-hidden rounded-control border border-line" role="group" aria-label="Demo view">
+        {VIEWS.map((view, index) => (
           <button
             key={view.value}
             type="button"
             aria-pressed={initialView === view.value}
             onClick={() => apply(view.value)}
-            className={`min-h-12 px-4 font-mono text-meta font-bold transition-colors ${
-              initialView === view.value ? "bg-yellow-400 text-black" : "bg-neutral-800 text-neutral-200 hover:bg-neutral-700"
+            className={`min-h-12 px-4 text-label font-ui transition-colors ${index > 0 ? "border-l border-line" : ""} ${
+              initialView === view.value ? "bg-action-dim text-action" : "bg-surface text-ink-soft hover:text-ink"
             }`}
           >
             {view.label}
