@@ -165,7 +165,9 @@ export function FacilitatorSessionLog({ session, members, facilitatorName }: Fac
       </label>
 
       <section className="flex flex-col gap-4">
-        <div className="flex flex-wrap items-baseline justify-between gap-2">
+        {/* Warning sits under the heading, not beside it — crowded against a
+            30px serif h2 it read as part of the title rather than a status. */}
+        <div className="flex flex-col gap-2">
           <h2 className="text-h3">{COPY.log.attendance}</h2>
           {unmarkedCount > 0 && (
             <div className="flex items-center gap-2">
@@ -179,10 +181,7 @@ export function FacilitatorSessionLog({ session, members, facilitatorName }: Fac
 
         <ul className="flex flex-col gap-4">
           {roster.map((member) => (
-            <li
-              key={member.id}
-              className="flex flex-col gap-3 border-b border-line pb-4 last:border-b-0 sm:flex-row sm:items-center sm:justify-between"
-            >
+            <li key={member.id} className="flex flex-col gap-3 border-b border-line pb-5 last:border-b-0">
               <div className="flex items-center gap-3">
                 <Avatar name={member.firstName} />
                 <div className="flex flex-wrap items-center gap-2">
