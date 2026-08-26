@@ -19,8 +19,13 @@ create table profiles (
 alter table profiles enable row level security;
 
 -- RLS policies only filter rows; Postgres still requires the base table
--- grant before a role can query it at all.
+-- grant before a role can query it at all. As of the "always revoked by
+-- default" Data API behavior (config.toml's auto_expose_new_tables note -
+-- this is the current default and becomes permanent 2026-10-30), NEW
+-- tables get zero implicit access for ANY Data API role, including
+-- service_role - it is not special-cased. Grant both explicitly.
 grant select on profiles to authenticated;
+grant all on profiles to service_role;
 
 -- Every signed-in user can read their own role. No insert/update/delete
 -- policy exists for anon/authenticated on purpose: role changes are a
@@ -66,12 +71,16 @@ create table sign_in_events (
   created_at timestamptz not null default now()
 );
 
--- Default-deny: no grant at all for anon/authenticated (not just "no
+-- Default-deny for anon/authenticated: no grant at all (not just "no
 -- policy") - querying this table as either role raises a permission error
--- rather than silently returning zero rows. Only the service-role client
--- (lib/supabase/admin.ts, server-only) reads or writes this table - it's
--- how we rate-limit and audit before a user has a session at all.
+-- rather than silently returning zero rows. service_role gets an explicit
+-- grant (see the note above profiles' grant) since it's the only client
+-- (lib/supabase/admin.ts, server-only) that reads or writes this table -
+-- it's how we rate-limit and audit before a user has a session at all.
+-- service_role bypasses RLS itself, but still needs the base grant.
 alter table sign_in_events enable row level security;
+grant all on sign_in_events to service_role;
+grant usage on sequence sign_in_events_id_seq to service_role;
 
 -- Rate-limit queries filter by identifier and a time window; this index
 -- makes "count attempts for X since Y" cheap instead of a table scan.
