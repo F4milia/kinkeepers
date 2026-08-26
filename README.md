@@ -20,6 +20,32 @@ You can start editing the page by modifying `app/page.tsx`. The page auto-update
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
+## Environments
+
+Pre-launch, there is one hosted Supabase project (`lupiicjafzrbihaosezv`), and it
+serves as staging. There is no separate production project yet — provisioning
+one, and the cutover, is R1's job (Wave 10), completing before cohort one's
+first live session. Until then, "staging" and "the hosted project" are the same
+thing; don't assume a prod/staging split exists elsewhere in config or docs.
+
+**One-command reset:** `npm run db:reset` (local Docker stack) or
+`npm run db:reset:staging` (the linked hosted project — requires
+`supabase link` first). Both drop and recreate the database from
+`supabase/migrations/` and reseed from `supabase/seed.sql`, so they're safe
+to run repeatedly.
+
+**What can't be tested in staging yet:** real outbound Twilio/Resend/Zoom
+delivery — none of those integrations exist yet (they land in P3/P4/X3).
+Once they do, staging must never send a real message to a real person; see
+`lib/messaging/staging-guard.ts` for the mechanism enforcing that.
+
+**Local Supabase stack is shared, not per-worktree.** `supabase start` /
+`supabase db reset` operate on Docker containers named after `project_id` in
+`supabase/config.toml` ("Kinkeepers") — if two worktrees of this repo run
+against the same machine, they share the same local database. Whoever runs
+`db:reset` needs the full current `supabase/migrations/` directory, not just
+their own new files, or it silently drops schema the other stream depends on.
+
 ## Learn More
 
 To learn more about Next.js, take a look at the following resources:
