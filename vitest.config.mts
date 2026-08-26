@@ -18,6 +18,8 @@ export default defineConfig({
   },
   test: {
     environment: "node",
+    include: ["**/*.test.ts", "**/*.test.tsx"],
+    exclude: ["node_modules", ".next"],
     env: {
       NEXT_PUBLIC_SUPABASE_URL: "http://127.0.0.1:54361",
       NEXT_PUBLIC_SUPABASE_ANON_KEY:
