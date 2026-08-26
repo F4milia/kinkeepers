@@ -8,7 +8,10 @@
     "start": "next start",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "db:start": "npx supabase start",
+    "db:reset": "npx supabase db reset",
+    "db:reset:staging": "npx supabase db reset --linked"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.5",
