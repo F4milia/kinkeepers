@@ -1,6 +1,7 @@
 import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { log, logError } from "@/lib/log";
+import { getDefaultZoomCredentials, getZoomAccessToken } from "@/lib/zoom/client";
 
 export type DependencyStatus = "healthy" | "unhealthy" | "not_configured";
 
@@ -58,19 +59,26 @@ async function checkAuth(): Promise<HealthCheckResult["checks"]["auth"]> {
   }
 }
 
-// P3 (Zoom integration) hasn't landed yet, so there is nothing to reach.
-// Env var names here are a forward-looking placeholder, not a contract -
-// P3 should treat these as provisional and rename if it lands on
-// something else.
+// Cheapest real reachability check: exchange for an access token. Doesn't
+// create a meeting or touch any real cohort/session data - just proves
+// the credentials are valid and Zoom's OAuth endpoint is reachable.
+// Still "not_configured", not "unhealthy", when credentials are absent -
+// this project has no Zoom credentials configured anywhere yet (confirmed
+// while building P3), so that's the expected state today, not a failure.
 async function checkZoom(): Promise<HealthCheckResult["checks"]["zoom"]> {
-  const configured =
-    process.env.ZOOM_ACCOUNT_ID && process.env.ZOOM_CLIENT_ID && process.env.ZOOM_CLIENT_SECRET;
-  if (!configured) {
+  let credentials;
+  try {
+    credentials = getDefaultZoomCredentials();
+  } catch {
     return { status: "not_configured" };
   }
-  // No Zoom client exists yet to perform a real reachability check with.
-  // Once P3 lands, replace this with an actual API call.
-  return { status: "not_configured", error: "Zoom configured but no client implemented yet" };
+
+  try {
+    await withTimeout(getZoomAccessToken(credentials), CHECK_TIMEOUT_MS);
+    return { status: "healthy" };
+  } catch (err) {
+    return { status: "unhealthy", error: (err as Error).message };
+  }
 }
 
 export async function checkHealth(): Promise<HealthCheckResult> {
