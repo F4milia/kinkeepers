@@ -23,5 +23,8 @@ jobs:
       # Integration tests connect to the local stack (see vitest.config.mts);
       # without this they hang until the 5s per-test timeout and fail.
       - run: supabase start
+      # Unconditional on every PR per kinkeepers-testing-workflow.md - this was
+      # missing entirely before, so RLS/schema regressions could pass CI green.
+      - run: supabase test db
       - run: npm run test
       - run: npm run build
