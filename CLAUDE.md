@@ -86,7 +86,7 @@ Implementation-specific conventions already decided in this codebase — not cov
 
 ## Companion docs
 
-kinkeepers-frontend-build.md (design system, copy deck) · KINKEEPERS-COMPLETE-RUN-DOC.md (waves, session prompts, edge-case register) · f4milia-master-sequence.md (program data model notes) · f4milia-revenue-model.md §2 (facilitator compensation).
+kinkeepers-frontend-build.md (design system, copy deck) · KINKEEPERS-COMPLETE-RUN-DOC.md (waves, session prompts, edge-case register) · kinkeepers-testing-workflow.md (review pipeline, trigger globs, the 09:30 merge window) · f4milia-master-sequence.md (program data model notes) · f4milia-revenue-model.md §2 (facilitator compensation).
 
 ## Learned constraints — append-only; never edit or remove entries
 
