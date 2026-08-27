@@ -60,11 +60,18 @@ export async function getCurrentRole(): Promise<AppRole | null> {
 // choices depending on the route, and that decision belongs to whichever
 // session builds that route (A1's admin shell, A2's review queue, etc.),
 // not to this shared primitive.
-export async function requireRole(allowed: AppRole[]): Promise<{
+//
+// `client` is optional and exists for testability (same reasoning as
+// resolveUserAndRole above) - real callers never pass it and get the
+// cookie-bound request client.
+export async function requireRole(
+  allowed: AppRole[],
+  client?: SupabaseClient,
+): Promise<{
   userId: string;
   role: AppRole;
 }> {
-  const supabase = await createClient();
+  const supabase = client ?? (await createClient());
   const result = await resolveUserAndRole(supabase);
   if (!result) throw new UnauthenticatedError();
 
