@@ -14,7 +14,7 @@
 1. Claude Code generates code + tests per the session prompt.
 2. PR opens, triggering:
    - **pgTAP suite** — the *stable, protected* isolation tests (a member can't read another cohort's rows, no role self-escalates, a partner organization can never reach individual member content) run unchanged on every PR, plus any new pgTAP tests the PR adds for new tables or RLS policies.
-   - **ZeroStep** — E2E user-flow validation, path-filtered to `app/**` and `components/**` so backend-only PRs don't wait on browser tests.
+   - **Playwright** — E2E user-flow validation, path-filtered to `app/**` and `components/**` so backend-only PRs don't wait on browser tests. (ZeroStep was tried and doesn't work — this is plain Playwright, not a stopgap pending a fix.)
    - **CodeRabbit** — diff scan on every PR. Useful signal, not a verdict: diff-only (can't see cross-file or architectural regressions), roughly 44% catch rate per independent benchmark, low noise.
    - **Greptile** — high-stakes PRs only (trigger globs below). Full-codebase context: indexes the whole repo and catches the cross-file breaks CodeRabbit structurally can't. Higher catch rate (~82% benchmarked), noisier — expect to triage some false positives; that's the trade being paid for on purpose.
 
