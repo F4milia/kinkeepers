@@ -14,9 +14,20 @@ describe("checkHealth", () => {
     expect(result.checks.auth.status).toBe("healthy");
   });
 
-  it("reports zoom as not_configured (P3 hasn't landed)", async () => {
+  it("reports zoom as not_configured when no credentials are set (the case today - none exist anywhere in this project)", async () => {
     const result = await checkHealth();
     expect(result.checks.zoom.status).toBe("not_configured");
+  });
+
+  it("reports zoom as unhealthy for real invalid credentials - a genuine rejection from Zoom's OAuth endpoint, not a mock", async () => {
+    vi.stubEnv("ZOOM_ACCOUNT_ID", "not-a-real-account");
+    vi.stubEnv("ZOOM_CLIENT_ID", "not-a-real-client");
+    vi.stubEnv("ZOOM_CLIENT_SECRET", "not-a-real-secret");
+
+    const result = await checkHealth();
+
+    expect(result.checks.zoom.status).toBe("unhealthy");
+    expect(result.checks.zoom.error).toBeTruthy();
   });
 
   it("correctly reports a degraded dependency - real unreachable database, not a mock", async () => {
