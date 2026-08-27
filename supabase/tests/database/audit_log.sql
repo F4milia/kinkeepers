@@ -18,6 +18,14 @@ insert into auth.users (id, email) values
 
 update profiles set role = 'admin' where id = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
 
+-- audit_log is append-only and actor_id -> profiles(id) has no ON DELETE
+-- behavior (defaults to RESTRICT), so on a long-lived database (local or
+-- hosted) other sessions' tests accumulate real, permanent rows here -
+-- confirmed happening already (admin-issued-sign-in-link's own test suite
+-- writes real rows every run). An absolute row count would go stale the
+-- moment any other privileged-action code exists; a baseline-delta doesn't.
+create temporary table audit_log_baseline as select count(*)::int as n from audit_log;
+
 -- record_audit_event() covers all five privileged-action types this
 -- session's acceptance criteria calls for.
 select lives_ok(
@@ -52,9 +60,9 @@ select lives_ok(
 );
 
 select is(
-  (select count(*)::int from audit_log),
+  (select count(*)::int from audit_log) - (select n from audit_log_baseline),
   5,
-  'all five inserts landed as five append-only rows'
+  'all five inserts landed as five new append-only rows (delta from baseline, not an absolute count)'
 );
 
 -- Hard deny for anon/authenticated - even an admin cannot read audit_log
