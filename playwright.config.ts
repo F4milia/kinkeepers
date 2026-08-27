@@ -1,10 +1,9 @@
 import { defineConfig, devices } from "@playwright/test";
 
 // E2E smoke coverage for what actually exists today (fixture-backed pages,
-// no real auth/backend flows yet - those land through L5/Wave 8). ZeroStep's
-// AI-driven step definitions aren't wired in yet; that needs its own API key
-// (same category as CodeRabbit/Greptile) and is a follow-up once there's a
-// real interactive flow worth writing one for, not something to fake now.
+// no real auth/backend flows yet - those land through L5/Wave 8). Plain
+// Playwright, permanently - ZeroStep was tried directly and doesn't work,
+// this isn't a stopgap pending a fix. See CLAUDE.md's Learned constraints.
 export default defineConfig({
   testDir: "./e2e",
   fullyParallel: true,
