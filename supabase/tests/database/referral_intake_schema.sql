@@ -82,10 +82,17 @@ select throws_ok(
   'partner staff cannot insert an applicant directly (no grant - writes go through Server Actions)'
 );
 
--- Admin: sees both.
+-- Admin: sees both of THIS test's applicants - scoped to their ids, not
+-- a raw table count. applicants is never actually empty in a long-lived
+-- database (every applicant_status_events-holding row is permanently
+-- undeletable - see lib/referral/actions.test.ts's afterAll for why),
+-- so an absolute count here would be the same class of bug already
+-- fixed once in audit_log.sql's pgTAP test - fixed here the same way
+-- before it ever shipped broken (caught while building P2 PR4).
 set local request.jwt.claims to '{"sub": "22222222-0000-0000-0000-000000000003", "role": "authenticated"}';
 select is(
-  (select count(*)::int from applicants),
+  (select count(*)::int from applicants
+     where id in ('33333333-0000-0000-0000-000000000001', '33333333-0000-0000-0000-000000000002')),
   2,
   'admin can read applicants across every partner organization'
 );
