@@ -39,8 +39,29 @@ describe("issueAdminSignInLink", () => {
   });
 
   afterAll(async () => {
-    await admin.auth.admin.deleteUser(adminUser.id);
-    await admin.auth.admin.deleteUser(memberUser.id);
+    // adminUser is deliberately NOT deleted here. audit_log is genuinely
+    // append-only (P7a's migration revokes UPDATE/DELETE from
+    // service_role on it, on purpose - even the admin client can't
+    // touch a row once written), and audit_log.actor_id has a foreign
+    // key to profiles(id) with no ON DELETE behavior (defaults to
+    // RESTRICT). The "issues a link" test below makes adminUser a real
+    // audit_log actor, and there is no code path - not this test, not
+    // any admin client - that can delete that profile/auth.users row
+    // afterward. That's not a bug to work around; it's the actual,
+    // permanent shape of the constraint: once a profile has acted as an
+    // audit_log actor, it can never be deleted. (Confirmed directly
+    // against GoTrue's logs: "violates foreign key constraint
+    // audit_log_actor_id_fkey", SQLSTATE 23503, when this test
+    // previously tried.) Real deletion-request fulfillment (P6/A5) will
+    // need to design around this - e.g. anonymize/detach rather than
+    // hard-delete an actor's profile - not assume a plain DELETE works.
+    //
+    // adminUser's email is Date.now()-suffixed, so repeated local runs
+    // accumulate harmless, uniquely-named leftover admin test rows
+    // rather than colliding - same tradeoff as not being able to clean
+    // them up.
+    const { error: deleteMemberError } = await admin.auth.admin.deleteUser(memberUser.id);
+    if (deleteMemberError) throw deleteMemberError;
   });
 
   beforeEach(async () => {
