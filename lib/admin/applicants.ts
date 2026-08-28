@@ -85,6 +85,39 @@ export async function listDeclinedApplicants(callerClient?: SupabaseClient): Pro
   }));
 }
 
+export interface ApplicantDetail extends QueuedApplicant {
+  status: string;
+}
+
+export async function getApplicantById(
+  applicantId: string,
+  callerClient?: SupabaseClient,
+): Promise<ApplicantDetail | null> {
+  await requireRole(["admin"], callerClient);
+  const admin = createAdminClient();
+  const { data, error } = await admin
+    .from("applicants")
+    .select(
+      "id, first_name, last_name, relationship, care_recipient_stage, time_zone, referral_source, pending_review_since, status",
+    )
+    .eq("id", applicantId)
+    .maybeSingle();
+
+  if (error || !data) return null;
+
+  return {
+    id: data.id,
+    firstName: data.first_name,
+    lastName: data.last_name,
+    relationship: data.relationship,
+    careRecipientStage: data.care_recipient_stage,
+    timeZone: data.time_zone,
+    referralSource: data.referral_source,
+    daysWaiting: daysSince(data.pending_review_since),
+    status: data.status,
+  };
+}
+
 export type ApplicantMutationResult = { success: true } | { success: false; error: string };
 
 export async function declineApplicantAction(
