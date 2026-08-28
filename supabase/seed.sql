@@ -69,6 +69,66 @@ select p.id, gs.session_number
 from programs p
 cross join lateral generate_series(1, p.session_count) as gs(session_number);
 
+-- cohorts (A2 stub) - two open cohorts so the assignment picker
+-- (lib/admin/assignment.ts) has real options to show composition and
+-- remaining capacity against. A3 (Wave 4) owns real cohort creation and
+-- will extend/replace this - kept to exactly the fields the A2 screens
+-- read, same reasoning as the migration's own comment.
+insert into cohorts (id, name, grouping_description, capacity, cadence, meeting_day_of_week, meeting_time, time_zone) values
+  (
+    '99999999-0000-0000-0000-000000000001', 'Spouses, Early Stage — Tuesday Evenings',
+    'Spouses caring for a partner in early-stage dementia',
+    12, 'every Tuesday', 2, '18:30', 'America/New_York'
+  ),
+  (
+    '99999999-0000-0000-0000-000000000002', 'Adult Children, Middle Stage — Thursday Mornings',
+    'Adult children caring for a parent in middle-stage dementia',
+    10, 'every Thursday', 4, '10:00', 'America/Chicago'
+  );
+
+-- applicants (P2/A2) - enough to exercise both admin/applicants tabs
+-- (pending review, declined) and the assignment picker's composition
+-- view. Two applicants share relationship+stage so
+-- applicant_waitlist_summary has a real count above 1 to show, not just
+-- singletons. Inserted with status 'pending_review' directly so the
+-- pending_review_since stamping trigger fires the same way a real
+-- intake-to-review transition would.
+insert into applicants (id, partner_organization_id, referral_source, first_name, last_name, email, phone, time_zone, relationship, care_recipient_stage, preferred_contact_channel, status) values
+  (
+    '88888888-0000-0000-0000-000000000001',
+    (select id from partner_organizations where name = 'Riverside Health Network'),
+    'partner_link', 'Miriam', 'Castillo', 'miriam.castillo@example.com', '+15125550101',
+    'America/Chicago', 'Spouse', 'early', 'both', 'pending_review'
+  ),
+  (
+    '88888888-0000-0000-0000-000000000002',
+    (select id from partner_organizations where name = 'Riverside Health Network'),
+    'staff_form', 'Priya', 'Desai', 'priya.desai@example.com', '+15125550102',
+    'America/Chicago', 'Spouse', 'early', 'email', 'pending_review'
+  ),
+  (
+    '88888888-0000-0000-0000-000000000003',
+    (select id from partner_organizations where name = 'Lakeside Family Medicine'),
+    'staff_form', 'Oscar', 'Bennett', 'oscar.bennett@example.com', '+13125550103',
+    'America/Chicago', 'Adult child', 'middle', 'sms', 'pending_review'
+  ),
+  (
+    '88888888-0000-0000-0000-000000000004',
+    (select id from partner_organizations where name = 'Lakeside Family Medicine'),
+    'staff_form', 'Frank', 'Delgado', 'frank.delgado@example.com', '+13125550104',
+    'America/Chicago', 'Sibling', 'late', 'both', 'declined'
+  );
+
+update applicants set decline_reason = 'unresponsive' where id = '88888888-0000-0000-0000-000000000004';
+
+-- Backdated so the admin queue's oldest-first sort and "N days waiting"
+-- copy have real variation to show - the stamping trigger sets these to
+-- now() on insert above, which would otherwise make every seeded row
+-- read "0 days waiting" and the sort order invisible.
+update applicants set pending_review_since = now() - interval '12 days' where id = '88888888-0000-0000-0000-000000000001';
+update applicants set pending_review_since = now() - interval '4 days' where id = '88888888-0000-0000-0000-000000000003';
+update applicants set pending_review_since = now() - interval '1 day' where id = '88888888-0000-0000-0000-000000000002';
+
 -- consent_documents (P6) - version 1 of all four, clearly marked as
 -- placeholder text pending Ivan's attorney-reviewed versions. Body text
 -- is deliberately generic/obviously-a-placeholder, not something that
