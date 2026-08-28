@@ -3,6 +3,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireRole } from "@/lib/auth/roles";
+import { sendResumeEmail } from "@/lib/referral/send-resume-email";
 
 const MAX_PARTNER_REFERENCE_ID_LENGTH = 64;
 
@@ -102,4 +103,94 @@ export async function createStaffReferral(
   }
 
   return { success: true, applicantId: data.id, resumeToken: data.resume_token };
+}
+
+// Ten fields max per the P2 spec (9 intake fields here; referral_source
+// and partner_reference_id are set at creation, not editable via this
+// path). All optional - only the keys actually present get written, so
+// a partial save never clobbers a field the caller didn't touch with an
+// accidental undefined/null.
+export interface IntakeFieldsUpdate {
+  firstName?: string;
+  lastName?: string;
+  email?: string;
+  phone?: string;
+  timeZone?: string;
+  relationship?: string;
+  careRecipientStage?: "early" | "middle" | "late" | "unsure";
+  availabilityWindows?: unknown;
+  preferredContactChannel?: "email" | "sms" | "both";
+}
+
+export type SaveIntakeProgressResult = { success: true } | { success: false; reason: "not_found" };
+
+/**
+ * Partial-save, called on every field blur (L2's spec) as the multi-step
+ * form fills in. Identified by resume_token, not an authenticated
+ * session - there isn't one at this point in the flow.
+ *
+ * Fires the resume-link email exactly once: only on the specific save
+ * where email transitions from absent to present, never on saves after
+ * that (which would resend it on every subsequent field blur).
+ */
+export async function saveIntakeProgress(
+  resumeToken: string,
+  fields: IntakeFieldsUpdate,
+): Promise<SaveIntakeProgressResult> {
+  const admin = createAdminClient();
+
+  const { data: current, error: fetchError } = await admin
+    .from("applicants")
+    .select("id, email")
+    .eq("resume_token", resumeToken)
+    .maybeSingle();
+
+  if (fetchError || !current) {
+    return { success: false, reason: "not_found" };
+  }
+
+  const dbFields: Record<string, unknown> = {};
+  if (fields.firstName !== undefined) dbFields.first_name = fields.firstName;
+  if (fields.lastName !== undefined) dbFields.last_name = fields.lastName;
+  if (fields.email !== undefined) dbFields.email = fields.email;
+  if (fields.phone !== undefined) dbFields.phone = fields.phone;
+  if (fields.timeZone !== undefined) dbFields.time_zone = fields.timeZone;
+  if (fields.relationship !== undefined) dbFields.relationship = fields.relationship;
+  if (fields.careRecipientStage !== undefined) dbFields.care_recipient_stage = fields.careRecipientStage;
+  if (fields.availabilityWindows !== undefined) dbFields.availability_windows = fields.availabilityWindows;
+  if (fields.preferredContactChannel !== undefined) {
+    dbFields.preferred_contact_channel = fields.preferredContactChannel;
+  }
+
+  const { error: updateError } = await admin.from("applicants").update(dbFields).eq("id", current.id);
+  if (updateError) throw updateError;
+
+  const emailJustProvided = !current.email && fields.email;
+  if (emailJustProvided) {
+    await sendResumeEmail(fields.email!, resumeToken, current.id);
+  }
+
+  return { success: true };
+}
+
+export type CompleteIntakeResult = { success: true } | { success: false; reason: "not_found" };
+
+// Transitions referred -> intake_complete. The status change itself is
+// what the applicants_log_status_event trigger (P2 PR2) picks up
+// automatically - this just performs the update.
+export async function completeIntake(resumeToken: string): Promise<CompleteIntakeResult> {
+  const admin = createAdminClient();
+
+  const { data, error } = await admin
+    .from("applicants")
+    .update({ status: "intake_complete" })
+    .eq("resume_token", resumeToken)
+    .select("id")
+    .maybeSingle();
+
+  if (error || !data) {
+    return { success: false, reason: "not_found" };
+  }
+
+  return { success: true };
 }
