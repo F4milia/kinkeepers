@@ -19,19 +19,36 @@ create type session_status as enum ('scheduled', 'completed', 'cancelled');
 -- flow is enforced by the Server Action and by the trigger below (which
 -- only validates a column when it's actually set), not by a blanket NOT
 -- NULL that would require inventing values for that one legacy row.
+--
+-- `status` defaults to 'draft', matching every genuinely NEW cohort
+-- (real creation always starts there, per the lifecycle spec) - a
+-- separate one-time backfill below fixes up the pre-existing row
+-- instead of using the column default for that purpose (confirmed by
+-- hand: defaulting to 'active' here for backfill convenience quietly
+-- makes 'active' the default for every future insert too, including
+-- ones that never explicitly set status - caught by a pgTAP test in the
+-- next PR that inserted a cohort without specifying status and got
+-- 'active' instead of the intended 'draft').
 alter table cohorts
   add column program_id uuid references programs (id),
   add column facilitator_id uuid references profiles (id),
   add column partner_organization_id uuid references partner_organizations (id),
   add column first_session_date date,
   add column delivery_format cohort_delivery_format,
-  add column status cohort_status not null default 'active',
+  add column status cohort_status not null default 'draft',
   -- Set only when Zoom meeting creation fails during cohort creation.
   -- Spec: "If Zoom creation fails, the cohort is created in draft and
   -- surfaces the error. Do not create a cohort with silently missing
   -- join links." This is where that error lives so it's actually
   -- visible, not just logged somewhere an admin never sees.
   add column zoom_setup_error text;
+
+-- One-time backfill: the row(s) that existed before this migration ran
+-- are real, already-delivering cohorts (A2's own demo data has a live
+-- enrolled applicant attached), not fresh drafts - captured before the
+-- column existed so it can't be confused with a genuinely new 'draft'
+-- row inserted moments later by this same reset/deploy.
+update cohorts set status = 'active' where status = 'draft';
 
 -- Enforces both cross-table checks a plain CHECK constraint can't
 -- express. Runs on INSERT and on UPDATE (not just creation) since a

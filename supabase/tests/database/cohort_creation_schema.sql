@@ -4,7 +4,7 @@
 -- cohorts and sessions.
 
 begin;
-select plan(14);
+select plan(15);
 
 insert into programs (id, name, developer, session_count, session_duration_minutes, delivery_formats, languages, facilitator_qualification, license_status) values
   ('99999999-0000-0000-0000-00000000c001', 'pgTAP A3 Licensed', 'Test Developer', 6, 90, array['video'], array['English'], 'Lay leader', 'licensed'),
@@ -34,6 +34,16 @@ select lives_ok(
   $$ insert into cohorts (id, name, grouping_description, capacity, cadence, meeting_day_of_week, meeting_time, time_zone, program_id)
      values ('77777777-0000-0000-0000-00000000c001', 'Good Cohort', 'x', 5, 'Weekly', 2, '18:00', 'America/New_York', '99999999-0000-0000-0000-00000000c001') $$,
   'creating a cohort on a licensed program succeeds'
+);
+
+-- A genuinely new cohort defaults to 'draft', not 'active' - the column
+-- default that backfills the one pre-existing legacy row (a real,
+-- already-delivering cohort) must not also become the default for every
+-- future insert that doesn't explicitly set status.
+select is(
+  (select status::text from cohorts where id = '77777777-0000-0000-0000-00000000c001'),
+  'draft',
+  'a new cohort inserted without specifying status defaults to draft, not active'
 );
 
 -- facilitator role trigger
