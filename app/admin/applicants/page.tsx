@@ -6,6 +6,7 @@ import {
   type QueuedApplicant,
   type DeclinedApplicant,
 } from "@/lib/admin/applicants";
+import { listWaitlistSummary } from "@/lib/admin/waitlist";
 import { DeclineApplicantButton } from "@/components/admin/decline-applicant-button";
 import { ReopenApplicantButton } from "@/components/admin/reopen-applicant-button";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -46,7 +47,7 @@ export default async function ApplicantsPage({
   if ("refusal" in result) return result.refusal;
 
   const { tab } = await searchParams;
-  const activeTab = tab === "declined" ? "declined" : "pending";
+  const activeTab = tab === "declined" ? "declined" : tab === "waitlist" ? "waitlist" : "pending";
 
   return (
     <div className="max-w-3xl">
@@ -68,9 +69,23 @@ export default async function ApplicantsPage({
         >
           Declined
         </Link>
+        <Link
+          href="/admin/applicants?tab=waitlist"
+          className={`min-h-12 px-4 py-3 text-label font-ui ${
+            activeTab === "waitlist" ? "border-b-2 border-action text-ink" : "text-ink-soft"
+          }`}
+        >
+          Waitlist summary
+        </Link>
       </nav>
       <div className="mt-6">
-        {activeTab === "pending" ? <PendingReviewList /> : <DeclinedList />}
+        {activeTab === "pending" ? (
+          <PendingReviewList />
+        ) : activeTab === "declined" ? (
+          <DeclinedList />
+        ) : (
+          <WaitlistSummary />
+        )}
       </div>
     </div>
   );
@@ -118,6 +133,35 @@ async function DeclinedList() {
           applicant={applicant}
           action={<ReopenApplicantButton applicantId={applicant.id} />}
         />
+      ))}
+    </ul>
+  );
+}
+
+async function WaitlistSummary() {
+  const groups = await listWaitlistSummary();
+
+  if (groups.length === 0) {
+    return <EmptyState headline="No one waiting" body="Every pending applicant is already matched or in review." />;
+  }
+
+  return (
+    <ul className="flex flex-col gap-3">
+      {groups.map((group) => (
+        <li
+          key={`${group.relationship ?? ""}|${group.careRecipientStage ?? ""}`}
+          className="flex items-center justify-between gap-4 rounded-card border border-line bg-surface p-4"
+        >
+          <div>
+            <p className="text-body font-ui font-medium text-ink">
+              {group.relationship ?? "Relationship not given"} · {group.careRecipientStage ?? "stage not given"}
+            </p>
+            <p className="text-meta font-ui text-ink-soft">
+              Oldest wait: {group.daysWaiting} {group.daysWaiting === 1 ? "day" : "days"}
+            </p>
+          </div>
+          <p className="text-h3 font-heading text-ink">{group.waitingCount}</p>
+        </li>
       ))}
     </ul>
   );

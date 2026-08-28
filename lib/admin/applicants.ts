@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireRole } from "@/lib/auth/roles";
 import type { DeclineReason } from "@/lib/admin/decline-reasons";
+import { daysSince } from "@/lib/admin/days-waiting";
 
 export interface QueuedApplicant {
   id: string;
@@ -19,12 +20,6 @@ export interface QueuedApplicant {
 
 export interface DeclinedApplicant extends QueuedApplicant {
   declineReason: DeclineReason | null;
-}
-
-function daysSince(isoTimestamp: string | null): number {
-  if (!isoTimestamp) return 0;
-  const elapsedMs = Date.now() - new Date(isoTimestamp).getTime();
-  return Math.max(0, Math.floor(elapsedMs / (24 * 60 * 60 * 1000)));
 }
 
 // Oldest first - "someone who applied twelve days ago and heard nothing
