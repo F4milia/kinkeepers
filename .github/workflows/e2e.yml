@@ -26,9 +26,30 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npx playwright install --with-deps chromium
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+      # playwright.config.ts's webServer runs `next build && next start`,
+      # which needs real-looking env vars the same as any Next.js build -
+      # this job never had a Supabase stack at all before, so every page
+      # load (middleware runs on all of them) failed at
+      # "project's URL and Key are required to create a Supabase client."
+      # Nothing had ever triggered this workflow to surface it until now
+      # (path-filtered to app/**, components/**; this PR is the first to
+      # touch app/** since e2e.yml was added). Same local demo keys as
+      # vitest.config.mts and ci.yml's `supabase start` - not a secret,
+      # only reachable at 127.0.0.1, identical on every local instance.
+      - run: supabase start
       - run: npm run test:e2e
         env:
           CI: true
+          NEXT_PUBLIC_SUPABASE_URL: http://127.0.0.1:54361
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0
+          SUPABASE_SERVICE_ROLE_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImV4cCI6MTk4MzgxMjk5Nn0.EGIM96RAZx35lJzdJsyH-qQwv8Hdp7fsn3W0YpN81IU
+          NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3000
+          # Not a real secret - CI only hashes localhost's own IP during
+          # these tests, nothing persisted beyond the ephemeral runner.
+          AUTH_IP_HASH_SECRET: ci-only-not-a-real-secret-0000000000000000
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
