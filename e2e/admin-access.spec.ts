@@ -17,6 +17,8 @@ const ADMIN_ROUTES = [
   "/admin",
   "/admin/cohorts",
   "/admin/reports",
+  "/admin/applicants",
+  "/admin/applicants?tab=declined",
   "/admin/partners",
   "/admin/partners/new",
   // requireRoleOrRefuse runs before getPartnerOrganization's not-found
