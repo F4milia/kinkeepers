@@ -93,6 +93,37 @@ export const COPY = {
     light: "Light",
     dark: "Dark",
   },
+  /**
+   * L4 (waitlist and program states). Literal strings are quoted directly
+   * from the L4 session prompt where it gave them. Where it didn't
+   * (assigned.what_to_expect, complete.body_no_next), the run doc and
+   * Part 1.2 both require asking rather than inventing — these were
+   * confirmed with Ferenz before being added here, not drafted solo.
+   *
+   * complete.body_with_next (the "if there's a next program, offer it"
+   * branch) is NOT here yet — that copy hasn't been confirmed, so L4 only
+   * builds the no-next-program case for now.
+   */
+  applicant: {
+    waiting_review: {
+      headline: "We're finding your group",
+      body: "We have your information and we're finding the right group for you.",
+    },
+    waitlisted: {
+      headline: "You're on the list",
+      body: "We don't have a group that fits you yet. We're looking for {grouping}, meeting {meetingTime}.",
+    },
+    assigned: {
+      headline: "Your first session",
+      facilitator_label: "Facilitator",
+      dial_in_label: "Or call in",
+      what_to_expect: "Sessions run about 90 minutes. You can turn your camera off if you'd rather just listen. There's no wrong way to take part.",
+    },
+    complete: {
+      headline: "You've completed the program",
+      body_no_next: "You've completed {program}. There's no other program open for you right now. If that changes, we'll reach out.",
+    },
+  },
 } as const;
 
 /** Fills `{key}` placeholders in a copy string, e.g. format(COPY.home.greeting, { firstName: "Denise" }). */

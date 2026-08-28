@@ -104,3 +104,40 @@ export interface Post {
   createdAt: string;
   replies: PostReply[];
 }
+
+/**
+ * Only the three statuses L4 has a screen for. P2's applicant_status enum
+ * also has referred, intake_complete, attending, declined, and withdrawn —
+ * "attending" moves someone into the normal caregiver app (no dedicated L4
+ * screen), and the other three don't reach the applicant-facing UI at all.
+ */
+export type ApplicantStatus = "pending_review" | "enrolled" | "completed";
+
+export interface AssignedSession {
+  date: string;
+  time: string;
+  timeZoneLabel: string;
+  joinUrl: string | null;
+  dialInNumber: string;
+  dialInPin: string;
+  facilitatorFirstName: string;
+}
+
+export interface Applicant {
+  id: string;
+  firstName: string;
+  status: ApplicantStatus;
+  /**
+   * Only meaningful when status is "pending_review". P2's schema has one
+   * status for both "just applied" and "waiting, no cohort fits yet" —
+   * applicant_waitlist_summary is keyed off pending_review alone — so this
+   * is a UI-only distinction pending L5's real matching signal.
+   */
+  hasMatchingCohort?: boolean;
+  /** Same phrasing convention as Cohort.grouping, e.g. "spouses caring for a partner in early-stage dementia". */
+  waitlistGroupingLabel?: string;
+  /** e.g. "evenings Eastern" — the cadence/timezone half of the waitlisted sentence. */
+  meetingTimeLabel?: string;
+  assignedSession?: AssignedSession;
+  completedProgramName?: string;
+}
