@@ -5,6 +5,14 @@ import { defineConfig } from "vitest/config";
 // local `supabase start`, only reachable at 127.0.0.1, not a secret.
 // Integration tests run against the local stack, never the hosted project.
 export default defineConfig({
+  // This Vite build's default transformer is oxc, not esbuild - oxc
+  // options take priority when both are set, and esbuild's `jsx` option
+  // is silently ignored otherwise. Only needed once a test transitively
+  // imports a .tsx module with real JSX in it
+  // (lib/admin/require-role-or-refuse.tsx, via
+  // lib/admin/require-role-or-refuse.test.ts). "automatic" matches Next's
+  // own JSX runtime (no explicit `import React` needed).
+  oxc: { jsx: { runtime: "automatic" } },
   resolve: {
     alias: {
       "@": path.resolve(import.meta.dirname, "."),
