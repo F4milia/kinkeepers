@@ -15,6 +15,10 @@ const PAGES = [
   { path: "/cohort", name: "cohort" },
   { path: "/discussion", name: "discussion" },
   { path: "/session/session-005", name: "session detail" },
+  { path: "/status/applicant-waiting-review", name: "applicant status — waiting for review" },
+  { path: "/status/applicant-waitlisted", name: "applicant status — waitlisted" },
+  { path: "/status/applicant-assigned", name: "applicant status — assigned" },
+  { path: "/status/applicant-complete", name: "applicant status — program complete" },
 ];
 
 for (const { path, name } of PAGES) {
