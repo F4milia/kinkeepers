@@ -9,6 +9,7 @@ import {
 import { DeclineApplicantButton } from "@/components/admin/decline-applicant-button";
 import { ReopenApplicantButton } from "@/components/admin/reopen-applicant-button";
 import { EmptyState } from "@/components/ui/empty-state";
+import { buttonClasses } from "@/components/ui/button";
 
 function applicantDisplayName(a: { firstName: string | null; lastName: string | null }): string {
   return [a.firstName, a.lastName].filter(Boolean).join(" ") || "Unnamed applicant";
@@ -28,7 +29,7 @@ function ApplicantRow({ applicant, action }: { applicant: QueuedApplicant; actio
           {applicant.daysWaiting} {applicant.daysWaiting === 1 ? "day" : "days"} waiting
         </p>
       </div>
-      {action}
+      <div className="flex items-center gap-2">{action}</div>
     </li>
   );
 }
@@ -89,7 +90,12 @@ async function PendingReviewList() {
           key={applicant.id}
           applicant={applicant}
           action={
-            <DeclineApplicantButton applicantId={applicant.id} applicantName={applicantDisplayName(applicant)} />
+            <>
+              <Link href={`/admin/applicants/${applicant.id}`} className={buttonClasses("secondary")}>
+                Review &amp; assign
+              </Link>
+              <DeclineApplicantButton applicantId={applicant.id} applicantName={applicantDisplayName(applicant)} />
+            </>
           }
         />
       ))}
