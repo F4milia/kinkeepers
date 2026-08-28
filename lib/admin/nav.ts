@@ -20,6 +20,11 @@ export interface AdminNavItem {
 // destination to exist.
 export const ADMIN_NAV_ITEMS: AdminNavItem[] = [
   {
+    href: "/admin/applicants",
+    label: () => "Applicants",
+    allowedRoles: ["admin"],
+  },
+  {
     href: "/admin/partners",
     label: () => "Partner organizations",
     allowedRoles: ["admin"],
