@@ -1,8 +1,26 @@
 "use server";
 
+import { headers } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import { checkSignInRateLimit } from "@/lib/auth/rate-limit";
 import { logSignInEvent } from "@/lib/auth/log-sign-in-event";
+
+// A fixed NEXT_PUBLIC_SITE_URL can only ever point at one deployment,
+// which breaks the magic-link redirect on every OTHER one - a preview
+// deployment's own emailed link would still redirect back to whatever
+// single URL that env var holds, landing on a domain that never had the
+// PKCE verifier cookie the request set (cookies don't cross Vercel
+// preview/production subdomains), so exchangeCodeForSession fails no
+// matter how correct the code otherwise is. Deriving the origin from the
+// actual incoming request instead means the redirect always matches
+// wherever the request really came from - production, any preview, or
+// local dev - with no per-environment configuration at all.
+async function getRequestOrigin(): Promise<string> {
+  const headersList = await headers();
+  const host = headersList.get("host");
+  const protocol = process.env.NODE_ENV === "development" ? "http" : "https";
+  return `${protocol}://${host}`;
+}
 
 // E.164: + followed by 8-15 digits, first digit 1-9. Deliberately not a
 // full phone-parsing library - callers (L1's sign-in form) are expected
@@ -43,7 +61,7 @@ export async function requestEmailLink(rawEmail: string): Promise<SignInRequestR
   const { error } = await supabase.auth.signInWithOtp({
     email,
     options: {
-      emailRedirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}/auth/callback`,
+      emailRedirectTo: `${await getRequestOrigin()}/auth/callback`,
     },
   });
 
