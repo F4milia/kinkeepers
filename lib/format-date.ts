@@ -20,7 +20,8 @@ export function formatLongDate(dateISO: string): string {
   return new Intl.DateTimeFormat("en-US", { month: "long", day: "numeric", year: "numeric" }).format(date);
 }
 
-function parseTimeLabel(time: string): { hours: number; minutes: number } {
+/** Parses a Part 3.1-style time label ("6:30 PM") into 24h hours/minutes — exported for schedule overlap math (F1). */
+export function parseTimeLabel(time: string): { hours: number; minutes: number } {
   const match = time.match(/(\d{1,2}):(\d{2})\s*(AM|PM)/i);
   if (!match) return { hours: 0, minutes: 0 };
   let hours = parseInt(match[1], 10) % 12;
