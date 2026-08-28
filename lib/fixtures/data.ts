@@ -1,4 +1,4 @@
-import type { Cohort, CohortMember, Post, Session } from "./types";
+import type { Applicant, Cohort, CohortMember, Post, Session } from "./types";
 
 /**
  * All content below is fictional. No real person is depicted.
@@ -191,5 +191,45 @@ export const posts: Post[] = [
         createdAt: "2026-08-20",
       },
     ],
+  },
+];
+
+// L4: one applicant per state the session builds a screen for. Two share
+// status "pending_review" (see Applicant.hasMatchingCohort) since P2's
+// schema doesn't distinguish them yet.
+export const applicants: Applicant[] = [
+  {
+    id: "applicant-waiting-review",
+    firstName: "Sandra",
+    status: "pending_review",
+    hasMatchingCohort: true,
+  },
+  {
+    id: "applicant-waitlisted",
+    firstName: "Michael",
+    status: "pending_review",
+    hasMatchingCohort: false,
+    waitlistGroupingLabel: "spouses caring for a partner in early-stage dementia",
+    meetingTimeLabel: "evenings Eastern",
+  },
+  {
+    id: "applicant-assigned",
+    firstName: "Dolores",
+    status: "enrolled",
+    assignedSession: {
+      date: "2026-09-08",
+      time: "6:30 PM",
+      timeZoneLabel: "Eastern",
+      joinUrl: "https://zoom.us/j/0000000000",
+      dialInNumber: "1-888-555-0199",
+      dialInPin: "204 819",
+      facilitatorFirstName: "Denise",
+    },
+  },
+  {
+    id: "applicant-complete",
+    firstName: "Walter",
+    status: "completed",
+    completedProgramName: "Tele-Savvy",
   },
 ];

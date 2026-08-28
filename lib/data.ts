@@ -6,10 +6,12 @@
  */
 
 import {
+  applicants,
   cohortMembers,
   cohorts,
   posts,
   sessions,
+  type Applicant,
   type Cohort,
   type CohortMember,
   type Facilitator,
@@ -58,4 +60,8 @@ export function getPosts(cohortId: string): Post[] {
   return posts
     .filter((post) => post.cohortId === cohortId)
     .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
+}
+
+export function getApplicant(applicantId: string): Applicant | undefined {
+  return applicants.find((applicant) => applicant.id === applicantId);
 }
