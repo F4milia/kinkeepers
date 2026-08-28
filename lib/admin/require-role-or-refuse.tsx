@@ -1,3 +1,4 @@
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { requireRole, UnauthenticatedError, ForbiddenError, type AppRole } from "@/lib/auth/roles";
 import { AccessRefused } from "@/components/admin/access-refused";
 
@@ -11,6 +12,17 @@ import { AccessRefused } from "@/components/admin/access-refused";
  * hitting /admin/reports directly gets an unhandled error page instead
  * of the required refusal UI. Pages whose allowed set exactly matches
  * the layout's don't need this - the layout already covers them.
+ *
+ * `callerClient` is optional and exists for testability, threaded
+ * straight through to requireRole() - see roles.ts for why real callers
+ * never pass it.
+ */
+export async function requireRoleOrRefuse(
+  allowed: AppRole[],
+  callerClient?: SupabaseClient,
+): Promise<{ role: AppRole } | { refusal: React.ReactElement }> {
+  try {
+    const { role } = await requireRole(allowed, callerClient);
  */
 export async function requireRoleOrRefuse(
   allowed: AppRole[],
