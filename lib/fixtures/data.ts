@@ -19,6 +19,22 @@ export const cohorts: Cohort[] = [
     sessionTotal: 6,
     deliveryFormat: "video",
   },
+  // F1: Denise's second cohort. Deliberately overlaps cohort-001's Tuesday
+  // meeting time (6:00-7:30 PM here vs. 6:30-8:30 PM there) so F1's
+  // schedule view has a real collision to flag, not a hypothetical one.
+  {
+    id: "cohort-002",
+    name: "Adult Children, Middle Stage — Tuesday Evenings",
+    grouping: "Adult children caring for a parent in middle-stage dementia",
+    program: "Stress-Busting Program",
+    cadence: "every Tuesday",
+    timeZoneLabel: "Eastern",
+    capacity: 10,
+    status: "active",
+    sessionNumber: 2,
+    sessionTotal: 9,
+    deliveryFormat: "in_person",
+  },
 ];
 
 export const cohortMembers: CohortMember[] = [
@@ -32,6 +48,11 @@ export const cohortMembers: CohortMember[] = [
   { id: "member-008", cohortId: "cohort-001", firstName: "Yvonne", caringFor: "her husband", role: "member" },
   { id: "member-009", cohortId: "cohort-001", firstName: "Bernadette", caringFor: "her husband", role: "member" },
   { id: "member-010", cohortId: "cohort-001", firstName: "Arthur", caringFor: "his wife", role: "member" },
+  // cohort-002 - same Denise (see FACILITATOR_VIEWER_MEMBER_IDS in
+  // lib/data.ts), a separate row because CohortMember is cohort-scoped.
+  { id: "member-011", cohortId: "cohort-002", firstName: "Denise", caringFor: "her husband", role: "facilitator" },
+  { id: "member-012", cohortId: "cohort-002", firstName: "Gloria", caringFor: "her mother", role: "member" },
+  { id: "member-013", cohortId: "cohort-002", firstName: "Samuel", caringFor: "his father", role: "member" },
 ];
 
 // Anchored to 2026-08-25 (a Tuesday). Cohort meets every Tuesday.
@@ -118,6 +139,43 @@ export const sessions: Session[] = [
     deliveryConfirmed: true,
     loggedBy: "Denise",
     loggedDate: "2026-08-11",
+  },
+  // cohort-002 - F1's second cohort for Denise. session-c2-003 overlaps
+  // session-005 above (both 2026-09-01, Eastern: 6:00-7:30 PM here vs.
+  // 6:30-8:30 PM there) - the schedule collision F1's home/schedule
+  // screens need to flag.
+  {
+    id: "session-c2-003",
+    cohortId: "cohort-002",
+    sessionNumber: 3,
+    sessionTotal: 9,
+    status: "upcoming",
+    date: "2026-09-01",
+    time: "6:00 PM",
+    timeZoneLabel: "Eastern",
+    durationMinutes: 90,
+    deliveryFormat: "in_person",
+    topic: null,
+    joinUrl: null,
+    materialsCount: 0,
+    attendingCount: 6,
+  },
+  // Past and NOT logged - the "sessions needing a log" case F1's home
+  // screen surfaces, and the "days overdue" case on the schedule screen.
+  {
+    id: "session-c2-002",
+    cohortId: "cohort-002",
+    sessionNumber: 2,
+    sessionTotal: 9,
+    status: "past",
+    date: "2026-08-18",
+    time: "6:00 PM",
+    timeZoneLabel: "Eastern",
+    durationMinutes: 90,
+    deliveryFormat: "in_person",
+    topic: null,
+    joinUrl: null,
+    materialsCount: 0,
   },
 ];
 
