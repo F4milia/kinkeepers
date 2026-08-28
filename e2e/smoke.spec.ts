@@ -19,6 +19,8 @@ const PAGES = [
   { path: "/status/applicant-waitlisted", name: "applicant status — waitlisted" },
   { path: "/status/applicant-assigned", name: "applicant status — assigned" },
   { path: "/status/applicant-complete", name: "applicant status — program complete" },
+  { path: "/facilitator", name: "facilitator home" },
+  { path: "/facilitator/schedule", name: "facilitator schedule" },
 ];
 
 for (const { path, name } of PAGES) {
