@@ -23,6 +23,12 @@ export async function requireRoleOrRefuse(
 ): Promise<{ role: AppRole } | { refusal: React.ReactElement }> {
   try {
     const { role } = await requireRole(allowed, callerClient);
+ */
+export async function requireRoleOrRefuse(
+  allowed: AppRole[],
+): Promise<{ role: AppRole } | { refusal: React.ReactElement }> {
+  try {
+    const { role } = await requireRole(allowed);
     return { role };
   } catch (error) {
     if (error instanceof UnauthenticatedError) {
