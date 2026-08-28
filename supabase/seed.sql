@@ -74,16 +74,19 @@ cross join lateral generate_series(1, p.session_count) as gs(session_number);
 -- remaining capacity against. A3 (Wave 4) owns real cohort creation and
 -- will extend/replace this - kept to exactly the fields the A2 screens
 -- read, same reasoning as the migration's own comment.
+-- cadence is a real enum as of A3's cohort_cadence_enum migration
+-- ('weekly'/'biweekly') - both these sample cohorts meet weekly, just on
+-- different days (meeting_day_of_week/meeting_time already carry that).
 insert into cohorts (id, name, grouping_description, capacity, cadence, meeting_day_of_week, meeting_time, time_zone) values
   (
     '99999999-0000-0000-0000-000000000001', 'Spouses, Early Stage — Tuesday Evenings',
     'Spouses caring for a partner in early-stage dementia',
-    12, 'every Tuesday', 2, '18:30', 'America/New_York'
+    12, 'weekly', 2, '18:30', 'America/New_York'
   ),
   (
     '99999999-0000-0000-0000-000000000002', 'Adult Children, Middle Stage — Thursday Mornings',
     'Adult children caring for a parent in middle-stage dementia',
-    10, 'every Thursday', 4, '10:00', 'America/Chicago'
+    10, 'weekly', 4, '10:00', 'America/Chicago'
   );
 
 -- applicants (P2/A2) - enough to exercise both admin/applicants tabs
