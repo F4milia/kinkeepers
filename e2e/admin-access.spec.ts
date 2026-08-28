@@ -19,6 +19,9 @@ const ADMIN_ROUTES = [
   "/admin/reports",
   "/admin/applicants",
   "/admin/applicants?tab=declined",
+  // requireRoleOrRefuse runs before getApplicantById's not-found check,
+  // same reasoning as the partner-edit route below.
+  "/admin/applicants/00000000-0000-0000-0000-000000000000",
   "/admin/partners",
   "/admin/partners/new",
   // requireRoleOrRefuse runs before getPartnerOrganization's not-found
