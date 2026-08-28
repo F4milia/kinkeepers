@@ -96,7 +96,14 @@ describe("intake progress", () => {
     expect(sendResumeEmail).toHaveBeenCalledTimes(1);
   });
 
-  it("completeIntake transitions status to intake_complete", async () => {
+  it("completeIntake transitions status to intake_complete, which immediately auto-advances to pending_review", async () => {
+    // A2 (Wave 3) added a database trigger that advances intake_complete
+    // straight to pending_review: nothing else ever put an applicant in
+    // the review queue, so "finished intake" and "waiting for review"
+    // are made the same moment. intake_complete still exists as a real,
+    // separately-logged transition in applicant_status_events (verified
+    // in supabase/tests/database/applicant_assignment.sql) - it just
+    // never persists as the applicant's resting status.
     const created = await createSelfReferral(partnerSlug);
     if (!created.success) throw new Error("expected success");
 
@@ -106,7 +113,7 @@ describe("intake progress", () => {
     const resolved = await resolveApplicantByResumeToken(created.resumeToken);
     expect(resolved.found).toBe(true);
     if (!resolved.found) throw new Error("expected found");
-    expect(resolved.fields.status).toBe("intake_complete");
+    expect(resolved.fields.status).toBe("pending_review");
   });
 
   it("completeIntake returns not_found for an unknown resume token", async () => {

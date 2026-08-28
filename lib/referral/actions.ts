@@ -177,7 +177,13 @@ export type CompleteIntakeResult = { success: true } | { success: false; reason:
 
 // Transitions referred -> intake_complete. The status change itself is
 // what the applicants_log_status_event trigger (P2 PR2) picks up
-// automatically - this just performs the update.
+// automatically - this just performs the update. As of A2 (Wave 3), a
+// second trigger (applicants_z_advance_intake_complete) immediately
+// cascades intake_complete -> pending_review in the same transaction, so
+// the applicant's resting status after this call is actually
+// pending_review, not intake_complete - see that migration's comment for
+// why. This function still only ever writes 'intake_complete'; it isn't
+// aware of (or responsible for) the cascade.
 export async function completeIntake(resumeToken: string): Promise<CompleteIntakeResult> {
   const admin = createAdminClient();
 
