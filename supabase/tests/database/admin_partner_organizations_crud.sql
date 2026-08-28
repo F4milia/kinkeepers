@@ -2,12 +2,17 @@
 -- (A1 PR3) - the two security-definer functions that compose a
 -- partner_organizations mutation with its audit_log row into one
 -- transaction. Same methodology as every other suite here: real role
--- switches, never assumed. Unlike audit_log.sql's own suite, the
--- audit_log assertions below use an absolute count rather than a
--- baseline delta - safely, because 'partner_organization_created' and
--- 'partner_organization_updated' are enum values this migration adds
--- for the first time, so no row anywhere (this run or a prior one; the
--- whole file runs inside begin/rollback) can already carry them.
+-- switches, never assumed; audit_log counts scoped by a baseline delta,
+-- not an absolute value.
+--
+-- An absolute count of 1 was tried first on the theory that
+-- 'partner_organization_created'/'partner_organization_updated' are
+-- brand-new enum values nothing else could have written yet - true only
+-- until lib/admin/partner-organizations.test.ts (a vitest suite that
+-- calls these functions against the real, non-rolled-back local
+-- database, same as any app-level integration test) ran once and left
+-- real permanent rows behind. Same class of bug as audit_log.sql's own
+-- header describes; same fix.
 
 begin;
 select plan(10);
@@ -31,6 +36,17 @@ reset role;
 
 set local role service_role;
 
+-- Created under service_role (not the default connecting role) so the
+-- later baseline-delta reads below, which also run as service_role, can
+-- actually see it - a temp table's default privileges belong to whoever
+-- created it.
+create temporary table audit_log_baseline as
+  select
+    count(*) filter (where action = 'partner_organization_created')::int as created_n,
+    count(*) filter (where action = 'partner_organization_updated')::int as updated_n
+  from audit_log
+  where subject_type = 'partner_organization';
+
 select lives_ok(
   $$ select admin_create_partner_organization(
        'dddddddd-dddd-dddd-dddd-dddddddddddd', 'pgTAP CRUD Org', 'pgtap-crud-org',
@@ -46,9 +62,10 @@ select is(
 
 select is(
   (select count(*)::int from audit_log
-     where action = 'partner_organization_created' and subject_type = 'partner_organization'),
+     where action = 'partner_organization_created' and subject_type = 'partner_organization')
+    - (select created_n from audit_log_baseline),
   1,
-  'creating a partner organization writes exactly one matching audit_log row'
+  'creating a partner organization writes exactly one new matching audit_log row'
 );
 
 select lives_ok(
@@ -68,9 +85,10 @@ select is(
 
 select is(
   (select count(*)::int from audit_log
-     where action = 'partner_organization_updated' and subject_type = 'partner_organization'),
+     where action = 'partner_organization_updated' and subject_type = 'partner_organization')
+    - (select updated_n from audit_log_baseline),
   1,
-  'updating a partner organization writes exactly one matching audit_log row'
+  'updating a partner organization writes exactly one new matching audit_log row'
 );
 
 select throws_ok(
