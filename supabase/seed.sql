@@ -68,3 +68,14 @@ insert into program_sessions (program_id, session_number)
 select p.id, gs.session_number
 from programs p
 cross join lateral generate_series(1, p.session_count) as gs(session_number);
+
+-- consent_documents (P6) - version 1 of all four, clearly marked as
+-- placeholder text pending Ivan's attorney-reviewed versions. Body text
+-- is deliberately generic/obviously-a-placeholder, not something that
+-- could be mistaken for real legal text if it ever leaked into a screen
+-- before real text lands.
+insert into consent_documents (document_type, version, body, is_placeholder) values
+  ('terms_of_service', 1, '[PLACEHOLDER - Terms of Service v1. Attorney-reviewed text pending. Do not treat as real.]', true),
+  ('privacy_policy', 1, '[PLACEHOLDER - Privacy Policy v1. Attorney-reviewed text pending. Do not treat as real.]', true),
+  ('participant_agreement', 1, '[PLACEHOLDER - Participant Agreement v1. Attorney-reviewed text pending. Do not treat as real.]', true),
+  ('group_confidentiality', 1, '[PLACEHOLDER - Group Confidentiality Agreement v1. Attorney-reviewed text pending. Do not treat as real. Members agree not to share what others say outside the group.]', true);
