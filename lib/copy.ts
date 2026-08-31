@@ -124,6 +124,40 @@ export const COPY = {
       body_no_next: "You've completed {program}. There's no other program open for you right now. If that changes, we'll reach out.",
     },
   },
+  /**
+   * F1 (facilitator home and schedule). Unlike L4, the F1 prompt quoted no
+   * literal copy at all — every string here was drafted and confirmed with
+   * Ferenz first, per Part 1.2's "ask, don't invent" rule. Plain functional
+   * labels (nav.home, nav.schedule, cohorts.title) follow the same
+   * low-risk precedent as existing structural titles like
+   * COPY.discussion.title.
+   */
+  facilitator: {
+    nav: {
+      home: "Home",
+      schedule: "Schedule",
+    },
+    home: {
+      next_session: "Your next session",
+      needs_log: "Needs a log",
+      cohorts_title: "Your cohorts",
+      empty_next_session: "No upcoming sessions scheduled.",
+      empty_needs_log: "Nothing waiting on a log.",
+    },
+    schedule: {
+      title: "Schedule",
+      upcoming: "Upcoming",
+      past: "Past",
+      logged: "Logged",
+      // Two strings, not one with plural syntax — format() is a plain
+      // {key} substitution, not an ICU MessageFormat parser (same reason
+      // COPY.discussion.replies_one/replies_many are split).
+      not_logged_one: "Not logged — 1 day overdue",
+      not_logged_many: "Not logged — {n} days overdue",
+      overlaps_with: "Overlaps with {cohortName}",
+      empty: "No sessions scheduled yet.",
+    },
+  },
 } as const;
 
 /** Fills `{key}` placeholders in a copy string, e.g. format(COPY.home.greeting, { firstName: "Denise" }). */

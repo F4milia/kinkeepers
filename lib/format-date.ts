@@ -14,6 +14,13 @@ export function formatRelativeDays(dateISO: string, now: Date = new Date()): str
   return `${diffDays} days ago`;
 }
 
+/** Days elapsed since a fixture date, floored at 0 — used for F1's "N days overdue" log status. */
+export function daysSince(dateISO: string, now: Date = new Date()): number {
+  const then = new Date(`${dateISO}T00:00:00`);
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  return Math.max(0, Math.round((today.getTime() - then.getTime()) / 86_400_000));
+}
+
 /** Formats a fixture date ("2026-08-18") as "August 18, 2026" — used for facilitator log record timestamps. */
 export function formatLongDate(dateISO: string): string {
   const date = new Date(`${dateISO}T00:00:00`);
