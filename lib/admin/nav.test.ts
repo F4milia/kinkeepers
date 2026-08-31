@@ -4,7 +4,13 @@ import { navItemsForRole } from "@/lib/admin/nav";
 describe("navItemsForRole", () => {
   it("shows an internal admin everything, including applicants and partner organizations", () => {
     const hrefs = navItemsForRole("admin").map((item) => item.href);
-    expect(hrefs).toEqual(["/admin/applicants", "/admin/partners", "/admin/cohorts", "/admin/reports"]);
+    expect(hrefs).toEqual([
+      "/admin/applicants",
+      "/admin/partners",
+      "/admin/cohorts",
+      "/admin/reports",
+      "/admin/data-requests",
+    ]);
   });
 
   it("shows a facilitator only cohorts, labeled 'My cohorts'", () => {
