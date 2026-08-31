@@ -39,6 +39,17 @@ export const ADMIN_NAV_ITEMS: AdminNavItem[] = [
     label: () => "Reports",
     allowedRoles: ["admin", "partner_staff"],
   },
+  {
+    href: "/admin/data-requests",
+    label: () => "Data requests",
+    // Admin-only, same as Applicants and Partner organizations - not
+    // named in A1's original three-persona spec, but "internal admin
+    // sees everything" already covers admin-only tools added later
+    // (those two are the precedent). This queue reads member PII
+    // fulfillment context, which is not something a partner_staff or
+    // facilitator persona has any reason to see.
+    allowedRoles: ["admin"],
+  },
 ];
 
 export function navItemsForRole(role: AppRole): AdminNavItem[] {

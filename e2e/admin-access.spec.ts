@@ -21,6 +21,7 @@ const ADMIN_ROUTES = [
   // check, same reasoning as the applicant/partner-edit routes below.
   "/admin/cohorts/00000000-0000-0000-0000-000000000000",
   "/admin/reports",
+  "/admin/data-requests",
   "/admin/applicants",
   "/admin/applicants?tab=declined",
   "/admin/applicants?tab=waitlist",

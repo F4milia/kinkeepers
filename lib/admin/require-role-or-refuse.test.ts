@@ -14,7 +14,8 @@ function refusalReason(refusal: ReactElement): string {
 // criterion ("direct URL access to an unpermitted route returns a
 // refusal, not a blank page") for every /admin/* page whose allowed set
 // is narrower than app/admin/layout.tsx's - /admin/reports,
-// /admin/partners, /admin/partners/new, /admin/partners/[id]/edit. This
+// /admin/data-requests, /admin/partners, /admin/partners/new,
+// /admin/partners/[id]/edit. This
 // had zero direct test coverage before this PR, even though every page
 // using it did. requireRole() itself (the underlying role resolution) is
 // already covered by lib/auth/roles.test.ts; this suite is specifically
