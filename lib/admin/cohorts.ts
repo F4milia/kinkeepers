@@ -76,6 +76,7 @@ export interface SessionListItem {
   status: string;
   videoJoinUrl: string | null;
   cancellationReason: string | null;
+  substituteFacilitatorId: string | null;
   substituteFacilitatorEmail: string | null;
 }
 
@@ -140,6 +141,7 @@ export async function getCohortDetail(
       status: s.status,
       videoJoinUrl: s.video_join_url,
       cancellationReason: s.cancellation_reason,
+      substituteFacilitatorId: s.substitute_facilitator_id,
       substituteFacilitatorEmail: s.substitute_facilitator_id
         ? (emails.get(s.substitute_facilitator_id) ?? null)
         : null,

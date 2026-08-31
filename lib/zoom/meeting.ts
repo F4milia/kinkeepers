@@ -129,6 +129,46 @@ export async function createRecurringMeeting(
   };
 }
 
+/**
+ * Moves one occurrence of a recurring meeting to a new start time, via
+ * Zoom's occurrence-scoped update endpoint - the other occurrences in the
+ * series are untouched. Requires the occurrence_id captured at meeting
+ * creation (CreatedMeeting.occurrenceIds); there is no way to address a
+ * single occurrence by date/session-number alone.
+ */
+export async function rescheduleMeetingOccurrence(
+  meetingId: string,
+  occurrenceId: string,
+  newStartTime: string,
+  credentials: ZoomCredentials = getDefaultZoomCredentials(),
+  fetchImpl: typeof fetch = fetch,
+): Promise<void> {
+  await zoomApiRequest(
+    `/meetings/${meetingId}/occurrences/${occurrenceId}`,
+    { method: "PATCH", body: JSON.stringify({ start_time: newStartTime }) },
+    credentials,
+    fetchImpl,
+  );
+}
+
+/**
+ * Cancels one occurrence of a recurring meeting, leaving the rest of the
+ * series (and the meeting itself) intact.
+ */
+export async function cancelMeetingOccurrence(
+  meetingId: string,
+  occurrenceId: string,
+  credentials: ZoomCredentials = getDefaultZoomCredentials(),
+  fetchImpl: typeof fetch = fetch,
+): Promise<void> {
+  await zoomApiRequest(
+    `/meetings/${meetingId}?occurrence_id=${encodeURIComponent(occurrenceId)}`,
+    { method: "DELETE" },
+    credentials,
+    fetchImpl,
+  );
+}
+
 // Zoom passcodes: alphanumeric, max 10 characters per Zoom's constraint.
 function generateMeetingPasscode(): string {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // no ambiguous 0/O/1/I
