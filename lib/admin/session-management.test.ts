@@ -1,4 +1,4 @@
-import { describe, expect, it, vi, beforeAll, afterAll } from "vitest";
+import { describe, expect, it, vi, beforeAll, beforeEach, afterAll } from "vitest";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { ForbiddenError } from "@/lib/auth/roles";
 import { clientForUser } from "@/test/helpers/local-auth";
@@ -7,10 +7,24 @@ import {
   cancelSessionAction,
   recordSessionSubstituteAction,
 } from "@/lib/admin/session-management";
+import { notifySessionRescheduled, notifySessionCancelled } from "@/lib/messaging/session-notifications";
 
 // revalidatePath only works inside a real Next.js request - see
 // lib/admin/partner-organizations.test.ts for the full reasoning.
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
+
+// Notification content/audience logic has its own dedicated coverage in
+// lib/messaging/session-notifications.test.ts - these tests only need to
+// confirm the WIRING (called with the right args at the right point),
+// not re-verify the notification's own internal behavior.
+vi.mock("@/lib/messaging/session-notifications", () => ({
+  notifySessionRescheduled: vi.fn().mockResolvedValue(undefined),
+  notifySessionCancelled: vi.fn().mockResolvedValue(undefined),
+}));
+
+beforeEach(() => {
+  vi.clearAllMocks();
+});
 
 function mockSuccessfulZoomActionFetch() {
   return vi
@@ -184,6 +198,31 @@ describe("session management actions", () => {
     expect(init.method).toBe("PATCH");
   });
 
+  it("notifies enrolled members of the new time after a successful reschedule", async () => {
+    const sessionId = await insertSession();
+    const adminClient = await clientForUser(adminUser.id);
+    const newTime = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString();
+
+    await rescheduleSessionAction(
+      sessionId,
+      newTime,
+      adminClient,
+      freshZoomCredentials(),
+      mockSuccessfulZoomActionFetch() as unknown as typeof fetch,
+    );
+
+    expect(notifySessionRescheduled).toHaveBeenCalledTimes(1);
+    const [, calledCohortId, calledInstant] = vi.mocked(notifySessionRescheduled).mock.calls[0];
+    expect(calledCohortId).toBe(cohortId);
+    expect(calledInstant.getTime()).toBe(new Date(newTime).getTime());
+  });
+
+  it("does not notify members when the reschedule itself fails", async () => {
+    const result = await rescheduleSessionAction("00000000-0000-0000-0000-000000000000", new Date().toISOString(), await clientForUser(adminUser.id));
+    expect(result.success).toBe(false);
+    expect(notifySessionRescheduled).not.toHaveBeenCalled();
+  });
+
   it("named edge case: rescheduling a session with no video_occurrence_id updates the DB but surfaces a Zoom warning, not a dead end", async () => {
     const sessionId = await insertSession({ video_meeting_id: null, video_occurrence_id: null });
     const adminClient = await clientForUser(adminUser.id);
@@ -243,6 +282,29 @@ describe("session management actions", () => {
     const [url, init] = zoomFetch.mock.calls[1];
     expect(url).toContain("/meetings/zm-1?occurrence_id=occ-1");
     expect(init.method).toBe("DELETE");
+  });
+
+  it("notifies enrolled members of the cancellation after a successful cancel", async () => {
+    const sessionId = await insertSession();
+    const adminClient = await clientForUser(adminUser.id);
+
+    await cancelSessionAction(
+      sessionId,
+      "facilitator unavailable",
+      adminClient,
+      freshZoomCredentials(),
+      mockSuccessfulZoomActionFetch() as unknown as typeof fetch,
+    );
+
+    expect(notifySessionCancelled).toHaveBeenCalledTimes(1);
+    const [, calledCohortId] = vi.mocked(notifySessionCancelled).mock.calls[0];
+    expect(calledCohortId).toBe(cohortId);
+  });
+
+  it("does not notify members when the cancellation itself fails", async () => {
+    const result = await cancelSessionAction("00000000-0000-0000-0000-000000000000", "reason", await clientForUser(adminUser.id));
+    expect(result.success).toBe(false);
+    expect(notifySessionCancelled).not.toHaveBeenCalled();
   });
 
   it("records a substitute facilitator without calling Zoom, leaving the cohort's own facilitator untouched", async () => {

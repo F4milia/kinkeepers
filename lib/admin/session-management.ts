@@ -6,6 +6,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { requireRole } from "@/lib/auth/roles";
 import { rescheduleMeetingOccurrence, cancelMeetingOccurrence } from "@/lib/zoom/meeting";
 import { getDefaultZoomCredentials, type ZoomCredentials } from "@/lib/zoom/client";
+import { notifySessionRescheduled, notifySessionCancelled } from "@/lib/messaging/session-notifications";
+import { logError } from "@/lib/log";
 
 export type SessionMutationResult =
   | { success: true }
@@ -20,6 +22,9 @@ interface SessionVideoDetails {
   cohortId: string;
   videoMeetingId: string | null;
   videoOccurrenceId: string | null;
+  videoJoinUrl: string | null;
+  scheduledAt: string;
+  cohortTimeZone: string;
 }
 
 type SessionLookupResult =
@@ -35,15 +40,35 @@ type SessionLookupResult =
 async function lookUpSessionVideoDetails(admin: SupabaseClient, sessionId: string): Promise<SessionLookupResult> {
   const { data, error } = await admin
     .from("sessions")
-    .select("cohort_id, video_meeting_id, video_occurrence_id")
+    .select("cohort_id, video_meeting_id, video_occurrence_id, video_join_url, scheduled_at, cohorts(time_zone)")
     .eq("id", sessionId)
     .maybeSingle();
   if (error) return { found: false, error: error.message };
   if (!data) return { found: false, error: "Session not found." };
   return {
     found: true,
-    session: { cohortId: data.cohort_id, videoMeetingId: data.video_meeting_id, videoOccurrenceId: data.video_occurrence_id },
+    session: {
+      cohortId: data.cohort_id,
+      videoMeetingId: data.video_meeting_id,
+      videoOccurrenceId: data.video_occurrence_id,
+      videoJoinUrl: data.video_join_url,
+      scheduledAt: data.scheduled_at,
+      cohortTimeZone: (data.cohorts as unknown as { time_zone: string } | null)?.time_zone ?? "UTC",
+    },
   };
+}
+
+/**
+ * Member notification is best-effort - a failure here must never undo
+ * or mask an already-successful reschedule/cancellation. Errors are
+ * logged, not surfaced to the admin as a failure of the action itself.
+ */
+async function notifyBestEffort(sendNotification: () => Promise<void>, logContext: Record<string, string>): Promise<void> {
+  try {
+    await sendNotification();
+  } catch {
+    logError("session_notification_failed", logContext);
+  }
 }
 
 export async function rescheduleSessionAction(
@@ -84,6 +109,18 @@ export async function rescheduleSessionAction(
     new_scheduled_at: newScheduledAt,
   });
   if (rescheduleError) return { success: false, error: rescheduleError.message };
+
+  await notifyBestEffort(
+    () =>
+      notifySessionRescheduled(
+        admin,
+        session.cohortId,
+        new Date(newScheduledAt),
+        session.cohortTimeZone,
+        session.videoJoinUrl,
+      ),
+    { session_id: sessionId, cohort_id: session.cohortId },
+  );
 
   revalidatePath(`/admin/cohorts/${session.cohortId}`);
   return zoomWarning ? { success: true, zoomWarning } : { success: true };
@@ -126,6 +163,11 @@ export async function cancelSessionAction(
     reason,
   });
   if (cancelError) return { success: false, error: cancelError.message };
+
+  await notifyBestEffort(
+    () => notifySessionCancelled(admin, session.cohortId, new Date(session.scheduledAt), session.cohortTimeZone),
+    { session_id: sessionId, cohort_id: session.cohortId },
+  );
 
   revalidatePath(`/admin/cohorts/${session.cohortId}`);
   return zoomWarning ? { success: true, zoomWarning } : { success: true };
