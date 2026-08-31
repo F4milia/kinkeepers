@@ -58,7 +58,7 @@ for (const { path, name } of PAGES) {
 // isn't covered here - there's no Playwright infrastructure yet for a
 // real signed-in browser context (same limitation admin-access.spec.ts
 // notes for /admin's wrong-role case).
-const CAREGIVER_ROUTES = ["/", "/cohort", "/discussion", "/session/session-005", "/components"];
+const CAREGIVER_ROUTES = ["/", "/cohort", "/discussion", "/session/session-005", "/components", "/consent"];
 
 for (const path of CAREGIVER_ROUTES) {
   test(`${path} redirects an unauthenticated visitor to /sign-in`, async ({ page }) => {
