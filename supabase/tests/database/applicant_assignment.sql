@@ -22,7 +22,7 @@ insert into partner_organizations (id, name, referral_link_slug) values
 insert into cohorts (id, name, grouping_description, capacity, cadence, meeting_day_of_week, meeting_time, time_zone)
 values (
   '55555555-0000-0000-0000-000000000001', 'pgTAP Test Cohort', 'Spouses, early stage',
-  1, 'Weekly', 2, '18:30', 'America/New_York'
+  1, 'weekly', 2, '18:30', 'America/New_York'
 );
 
 set local role authenticated;
@@ -46,7 +46,7 @@ reset role;
 set local role anon;
 select throws_ok(
   $$ insert into cohorts (name, grouping_description, capacity, cadence, meeting_day_of_week, meeting_time, time_zone)
-     values ('Fake', 'x', 1, 'Weekly', 0, '10:00', 'UTC') $$,
+     values ('Fake', 'x', 1, 'weekly', 0, '10:00', 'UTC') $$,
   '42501', null,
   'anon cannot create a cohort'
 );

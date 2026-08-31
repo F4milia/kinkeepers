@@ -46,7 +46,7 @@ describe("cohort assignment", () => {
     partnerOrgId = org.id;
 
     const cohortFields = {
-      cadence: "Weekly",
+      cadence: "weekly",
       meeting_day_of_week: 2,
       meeting_time: "18:30",
       time_zone: "America/New_York",

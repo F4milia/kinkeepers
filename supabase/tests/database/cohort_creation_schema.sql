@@ -25,14 +25,14 @@ update profiles set role = 'facilitator' where id = '66666666-0000-0000-0000-000
 -- program licensing trigger
 select throws_ok(
   $$ insert into cohorts (name, grouping_description, capacity, cadence, meeting_day_of_week, meeting_time, time_zone, program_id)
-     values ('Bad Cohort', 'x', 5, 'Weekly', 2, '18:00', 'America/New_York', '99999999-0000-0000-0000-00000000c002') $$,
+     values ('Bad Cohort', 'x', 5, 'weekly', 2, '18:00', 'America/New_York', '99999999-0000-0000-0000-00000000c002') $$,
   null, 'program 99999999-0000-0000-0000-00000000c002 is not licensed - cohorts may only run on licensed programs',
   'creating a cohort on a not_licensed program raises'
 );
 
 select lives_ok(
   $$ insert into cohorts (id, name, grouping_description, capacity, cadence, meeting_day_of_week, meeting_time, time_zone, program_id)
-     values ('77777777-0000-0000-0000-00000000c001', 'Good Cohort', 'x', 5, 'Weekly', 2, '18:00', 'America/New_York', '99999999-0000-0000-0000-00000000c001') $$,
+     values ('77777777-0000-0000-0000-00000000c001', 'Good Cohort', 'x', 5, 'weekly', 2, '18:00', 'America/New_York', '99999999-0000-0000-0000-00000000c001') $$,
   'creating a cohort on a licensed program succeeds'
 );
 
