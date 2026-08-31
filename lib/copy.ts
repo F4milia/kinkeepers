@@ -230,6 +230,32 @@ export const COPY = {
       body: "We have your information. Someone will reach out within three business days.",
     },
   },
+  /**
+   * L3, consent section only (notification preferences and account info
+   * deferred - see CLAUDE.md/session notes on the missing profiles<->
+   * applicants link). Document type names are plain factual labels, not
+   * invented copy - they name what the document already is. checkbox/
+   * agree/continue are functional verbs, same precedent as L1/L2. The
+   * group-confidentiality intro was confirmed with Ferenz first, since
+   * the prompt only described the tone it needed ("a commitment to the
+   * group, not a legal formality"), not literal text.
+   */
+  consent: {
+    title: "Agreements",
+    document_name: {
+      terms_of_service: "Terms of Service",
+      privacy_policy: "Privacy Policy",
+      participant_agreement: "Participant Agreement",
+      group_confidentiality: "Group Confidentiality Agreement",
+    },
+    group_confidentiality_intro:
+      "Before your first session, there's one more agreement — this one made to your group, not to us. What people share here is theirs. Agreeing means you'll keep it that way, even after you leave the group.",
+    checkbox_label: "I have read and agree to the {documentName}",
+    agree: "Agree",
+    consented_on: "Agreed {date}",
+    all_done: "You're up to date on your agreements.",
+    discussion_line: "What's shared here stays here.",
+  },
 } as const;
 
 /** Fills `{key}` placeholders in a copy string, e.g. format(COPY.home.greeting, { firstName: "Denise" }). */
