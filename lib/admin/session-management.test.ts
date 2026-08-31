@@ -150,6 +150,16 @@ describe("session management actions", () => {
     );
   });
 
+  it("reports a real 'Session not found.' for a nonexistent id, not a swallowed query error", async () => {
+    const adminClient = await clientForUser(adminUser.id);
+    const result = await rescheduleSessionAction(
+      "00000000-0000-0000-0000-000000000000",
+      new Date().toISOString(),
+      adminClient,
+    );
+    expect(result).toEqual({ success: false, error: "Session not found." });
+  });
+
   it("reschedules a session and updates the Zoom occurrence when one exists", async () => {
     const sessionId = await insertSession();
     const adminClient = await clientForUser(adminUser.id);
