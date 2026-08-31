@@ -6,7 +6,7 @@
 -- switches, never assumed; audit_log counts scoped by a baseline delta.
 
 begin;
-select plan(14);
+select plan(15);
 
 insert into programs (id, name, developer, session_count, session_duration_minutes, delivery_formats, languages, facilitator_qualification, license_status) values
   ('99999999-0000-0000-0000-00000000f001', 'pgTAP Finalize Program', 'Test Developer', 3, 90, array['video'], array['English'], 'Lay leader', 'licensed');
@@ -52,10 +52,16 @@ create temporary table audit_log_baseline as
 
 select lives_ok(
   format(
-    $$ select finalize_cohort_sessions(%L, '77777777-0000-0000-0000-00000000f001', 'zm-1', 'https://zoom.us/j/1', 'pass', '+15551234567', '999999', array[now() + interval '1 day', now() + interval '8 days', now() + interval '15 days']) $$,
+    $$ select finalize_cohort_sessions(%L, '77777777-0000-0000-0000-00000000f001', 'zm-1', 'https://zoom.us/j/1', 'pass', '+15551234567', '999999', array[now() + interval '1 day', now() + interval '8 days', now() + interval '15 days'], array['occ-1', 'occ-2', 'occ-3']) $$,
     '66666666-0000-0000-0000-00000000f001'
   ),
   'service_role can finalize a cohort''s sessions'
+);
+
+select is(
+  (select array_agg(video_occurrence_id order by session_number) from sessions where cohort_id = '77777777-0000-0000-0000-00000000f001'),
+  array['occ-1', 'occ-2', 'occ-3'],
+  'each session stores its own matching Zoom occurrence id, in order'
 );
 
 select is(

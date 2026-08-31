@@ -138,6 +138,12 @@ export async function createCohortAction(
     p_video_dial_in_number: meeting.dialInNumber,
     p_video_dial_in_pin: meeting.dialInPin,
     session_instants: sessionInstants.map((instant) => instant.toISOString()),
+    // Only passed when Zoom actually returned one id per session - an
+    // empty or short array falls back to the SQL function's own default
+    // (every session's occurrence id stored as null) rather than
+    // mis-assigning ids to the wrong sessions.
+    video_occurrence_ids:
+      meeting.occurrenceIds.length === sessionInstants.length ? meeting.occurrenceIds : undefined,
   });
 
   if (finalizeError) {

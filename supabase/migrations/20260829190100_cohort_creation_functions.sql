@@ -24,7 +24,14 @@ create function finalize_cohort_sessions(
   p_video_passcode text,
   p_video_dial_in_number text,
   p_video_dial_in_pin text,
-  session_instants timestamptz[]
+  session_instants timestamptz[],
+  -- Zoom's own per-occurrence id, one per entry in session_instants, same
+  -- order - required later to reschedule or cancel a single session's
+  -- Zoom occurrence without touching the rest of the recurring series.
+  -- Nullable per-element (not every caller may have one yet) rather than
+  -- a NOT NULL array, so this stays backward-compatible with the
+  -- already-passing test in this same file that doesn't pass any.
+  video_occurrence_ids text[] default null
 )
 returns cohorts
 language plpgsql
@@ -38,11 +45,13 @@ begin
   for i in 1..coalesce(array_length(session_instants, 1), 0) loop
     insert into public.sessions (
       cohort_id, session_number, scheduled_at,
-      video_meeting_id, video_join_url, video_passcode, video_dial_in_number, video_dial_in_pin
+      video_meeting_id, video_join_url, video_passcode, video_dial_in_number, video_dial_in_pin,
+      video_occurrence_id
     )
     values (
       target_cohort_id, i, session_instants[i],
-      p_video_meeting_id, p_video_join_url, p_video_passcode, p_video_dial_in_number, p_video_dial_in_pin
+      p_video_meeting_id, p_video_join_url, p_video_passcode, p_video_dial_in_number, p_video_dial_in_pin,
+      video_occurrence_ids[i]
     );
   end loop;
 

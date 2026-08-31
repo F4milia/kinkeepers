@@ -29,6 +29,14 @@ function mockSuccessfulZoomFetch() {
         join_url: "https://zoom.us/j/123456789",
         password: "aB3xY9",
         settings: { global_dial_in_numbers: [{ number: "+1 555 000 1111", type: "toll", country: "US" }] },
+        // Matches the test program's session_count (3) so the "one
+        // occurrence id per session" path is actually exercised, not the
+        // length-mismatch fallback.
+        occurrences: [
+          { occurrence_id: "occ-1", start_time: "2027-03-09T18:30:00Z" },
+          { occurrence_id: "occ-2", start_time: "2027-03-16T18:30:00Z" },
+          { occurrence_id: "occ-3", start_time: "2027-03-23T18:30:00Z" },
+        ],
       }),
     });
 }
@@ -193,12 +201,13 @@ describe("createCohortAction", () => {
 
     const { data: sessions } = await admin
       .from("sessions")
-      .select("session_number, video_join_url")
+      .select("session_number, video_join_url, video_occurrence_id")
       .eq("cohort_id", result.cohortId)
       .order("session_number");
     // The program has session_count = 3, never hardcoded.
     expect(sessions).toHaveLength(3);
     expect(sessions?.every((s) => s.video_join_url === "https://zoom.us/j/123456789")).toBe(true);
+    expect(sessions?.map((s) => s.video_occurrence_id)).toEqual(["occ-1", "occ-2", "occ-3"]);
 
     const { data: auditRows } = await admin
       .from("audit_log")
