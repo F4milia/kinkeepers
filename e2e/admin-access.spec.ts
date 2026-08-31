@@ -16,6 +16,10 @@ import { test, expect } from "@playwright/test";
 const ADMIN_ROUTES = [
   "/admin",
   "/admin/cohorts",
+  "/admin/cohorts/new",
+  // requireRole (inside getCohortDetail) runs before its own not-found
+  // check, same reasoning as the applicant/partner-edit routes below.
+  "/admin/cohorts/00000000-0000-0000-0000-000000000000",
   "/admin/reports",
   "/admin/applicants",
   "/admin/applicants?tab=declined",

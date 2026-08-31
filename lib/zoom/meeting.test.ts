@@ -91,6 +91,7 @@ describe("createRecurringMeeting", () => {
       settings: {
         global_dial_in_numbers: [{ number: "+1 305 224 1968", type: "toll", country: "US" }],
       },
+      occurrences: [{ occurrence_id: "occ-1", start_time: "2026-09-01T18:30:00Z" }],
     });
 
     const meeting = await createRecurringMeeting(
@@ -105,7 +106,37 @@ describe("createRecurringMeeting", () => {
       passcode: "aB3xY9",
       dialInNumber: "+1 305 224 1968",
       dialInPin: "445566",
+      occurrenceIds: ["occ-1"],
     });
+  });
+
+  it("returns occurrence ids sorted by start_time, matching session_number order", async () => {
+    const credentials = freshCredentials();
+    const fetchMock = mockZoomFetch({
+      id: 1,
+      join_url: "https://zoom.us/j/1",
+      password: "x",
+      // Deliberately out of order in the response, to prove sorting isn't
+      // just "pass Zoom's array through as-is".
+      occurrences: [
+        { occurrence_id: "occ-3", start_time: "2026-09-15T18:30:00Z" },
+        { occurrence_id: "occ-1", start_time: "2026-09-01T18:30:00Z" },
+        { occurrence_id: "occ-2", start_time: "2026-09-08T18:30:00Z" },
+      ],
+    });
+
+    const meeting = await createRecurringMeeting(baseParams, credentials, fetchMock as unknown as typeof fetch);
+
+    expect(meeting.occurrenceIds).toEqual(["occ-1", "occ-2", "occ-3"]);
+  });
+
+  it("returns an empty occurrenceIds array when Zoom returns no occurrences", async () => {
+    const credentials = freshCredentials();
+    const fetchMock = mockZoomFetch({ id: 1, join_url: "https://zoom.us/j/1", password: "x" });
+
+    const meeting = await createRecurringMeeting(baseParams, credentials, fetchMock as unknown as typeof fetch);
+
+    expect(meeting.occurrenceIds).toEqual([]);
   });
 
   it("handles a response with no dial-in numbers gracefully (null, not a crash)", async () => {

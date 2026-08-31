@@ -53,9 +53,12 @@ function timeZoneOffsetMinutes(instant: Date, timeZone: string): number {
  * The real UTC instant that a given wall-clock date/time represents in
  * `timeZone`. Converges in one correction for almost every case; two
  * iterations covers the rare instant that lands exactly on a DST
- * transition itself.
+ * transition itself. Exported for generateSessionInstants below - A3's
+ * cohort creation needs the same wall-clock-to-UTC conversion, anchored
+ * to an admin-chosen first session date rather than "the next occurrence
+ * from now."
  */
-function zonedWallTimeToUtc(
+export function zonedWallTimeToUtc(
   year: number,
   month: number,
   day: number,
@@ -126,4 +129,31 @@ export function describeCohortMeetingForApplicant(
   const applicantSide = formatMeetingTime(instant, applicantTimeZone);
   const cohortSide = formatMeetingTime(instant, slot.timeZone);
   return `${applicantSide} your time (${cohortSide} for the group)`;
+}
+
+/**
+ * The full session schedule for a new cohort: `sessionCount` occurrences
+ * starting at `firstSessionDate` (an admin-chosen "YYYY-MM-DD", not
+ * derived from meetingDayOfWeek - the admin picks the actual first
+ * date), spaced `cadenceDays` apart (7 for weekly, 14 for biweekly).
+ * Each instant is computed independently via zonedWallTimeToUtc rather
+ * than by adding milliseconds to the previous one, so DST transitions
+ * partway through a 6-9 session run are handled correctly on either
+ * side, same reasoning as nextMeetingInstant.
+ */
+export function generateSessionInstants(
+  meetingTime: string,
+  timeZone: string,
+  firstSessionDate: string,
+  cadenceDays: number,
+  sessionCount: number,
+): Date[] {
+  const [hourStr, minuteStr] = meetingTime.split(":");
+  const hour = Number(hourStr);
+  const minute = Number(minuteStr);
+  const [year, month, day] = firstSessionDate.split("-").map(Number);
+
+  return Array.from({ length: sessionCount }, (_, index) =>
+    zonedWallTimeToUtc(year, month, day + index * cadenceDays, hour, minute, timeZone),
+  );
 }
