@@ -158,6 +158,32 @@ export const COPY = {
       empty: "No sessions scheduled yet.",
     },
   },
+  /**
+   * L1 (sign-in), amended per Ferenz's direct instruction: email only for
+   * now, SMS deferred until Twilio is configured — CLAUDE.md's "magic link
+   * + SMS code" invariant names the intended two methods, not a
+   * requirement that both be simultaneously live; SMS genuinely cannot
+   * function without real Twilio credentials, same credential-gap
+   * treatment already given to Zoom/Sentry elsewhere in this codebase.
+   *
+   * sent_body and error_rate_limited are quoted directly from the L1
+   * prompt. error_link_invalid was confirmed with Ferenz first (no
+   * literal text given for that case). Everything else is a plain
+   * functional label, same low-risk precedent as existing structural
+   * titles/button verbs (COPY.log.submit, COPY.discussion.post).
+   */
+  sign_in: {
+    title: "Sign in",
+    email_label: "Email",
+    send_link: "Send link",
+    sent_body: "We sent a link to {email}. Open it on this device if you can.",
+    resend: "Resend link",
+    resend_countdown: "You can resend in {n}s",
+    error_invalid_email: "Enter a valid email address.",
+    error_rate_limited: "Too many tries. Wait a few minutes, or call us at {phoneNumber}.",
+    error_send_failed: "We couldn't send that. Try again.",
+    error_link_invalid: "That link has expired or was already used. Send a new one below.",
+  },
 } as const;
 
 /** Fills `{key}` placeholders in a copy string, e.g. format(COPY.home.greeting, { firstName: "Denise" }). */
