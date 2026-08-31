@@ -5,6 +5,7 @@ import { requireRole } from "@/lib/auth/roles";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { SessionActions } from "@/components/admin/session-actions";
+import { MarkCohortCompletedButton } from "@/components/admin/mark-cohort-completed-button";
 
 const STATUS_BADGE: Record<string, "neutral" | "accent" | "gentle"> = {
   draft: "gentle",
@@ -45,6 +46,12 @@ export default async function CohortDetailPage({ params }: { params: Promise<{ i
         <p className="mt-4 text-body font-ui text-ink">
           Zoom setup failed: {cohort.zoomSetupError}. This cohort has no sessions yet.
         </p>
+      ) : null}
+
+      {role === "admin" && cohort.status === "active" ? (
+        <div className="mt-4">
+          <MarkCohortCompletedButton cohortId={cohort.id} cohortName={cohort.name} />
+        </div>
       ) : null}
 
       <h2 className="mt-8 text-h3 font-heading text-ink">Sessions</h2>
