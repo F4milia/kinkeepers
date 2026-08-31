@@ -6,9 +6,9 @@ import { listCohorts, getCohortDetail, listLicensedPrograms, listFacilitators } 
 const admin = createAdminClient();
 
 describe("cohorts admin data layer", () => {
-  let adminUser: { id: string };
-  let facilitatorAUser: { id: string };
-  let facilitatorBUser: { id: string };
+  let adminUser: { id: string; email?: string };
+  let facilitatorAUser: { id: string; email?: string };
+  let facilitatorBUser: { id: string; email?: string };
   let licensedProgramId: string;
   let notLicensedProgramId: string;
   let ownCohortId: string;
