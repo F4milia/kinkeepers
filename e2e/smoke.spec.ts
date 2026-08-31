@@ -27,6 +27,8 @@ const PAGES = [
   { path: "/status/applicant-complete", name: "applicant status — program complete" },
   { path: "/facilitator", name: "facilitator home" },
   { path: "/facilitator/schedule", name: "facilitator schedule" },
+  { path: "/refer/riverside-health", name: "referral landing — valid partner slug" },
+  { path: "/refer/not-a-real-slug", name: "referral landing — invalid partner slug" },
 ];
 
 for (const { path, name } of PAGES) {

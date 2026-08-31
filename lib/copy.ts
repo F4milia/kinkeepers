@@ -184,6 +184,52 @@ export const COPY = {
     error_send_failed: "We couldn't send that. Try again.",
     error_link_invalid: "That link has expired or was already used. Send a new one below.",
   },
+  /**
+   * L2 (referral landing and intake). Several strings are quoted directly
+   * from the L2 prompt (start, referred_by, step_indicator, saved,
+   * stage_unsure, confirmation.body). Two were confirmed with Ferenz
+   * first, since the prompt only described the requirement, not literal
+   * text: landing.blurb (the "what KinKeepers is, four sentences"
+   * description) and invalid_link. Field labels are plain functional
+   * labels, same low-risk precedent as L1's email_label.
+   */
+  referral: {
+    landing: {
+      blurb:
+        "KinKeepers is a small group for people caring for someone with dementia. You meet with the same six to twelve people every week, by video, with a facilitator who's been trained to lead the group. It's a place to talk about what caregiving is actually like, with people who understand. What's said in the group stays in the group.",
+      referred_by: "Referred by {name}",
+      start: "Start",
+      invalid_link: "This link isn't working. Call us at {phoneNumber} and we can help you get started.",
+    },
+    step_indicator: "Step {n} of 3",
+    saved: "We saved your answers.",
+    back: "Back",
+    next: "Continue",
+    field: {
+      first_name: "First name",
+      last_name: "Last name",
+      email: "Email",
+      phone: "Phone",
+      time_zone: "Time zone",
+      relationship: "Your relationship to the person you care for",
+      stage: "Their stage",
+      stage_unsure: "I'm not sure",
+      availability: "When are you usually free to meet?",
+      contact_preference: "How should we reach you?",
+      contact_email: "Email",
+      contact_sms: "Text",
+      contact_both: "Either",
+    },
+    availability_option: {
+      weekday_mornings: "Weekday mornings",
+      weekday_afternoons: "Weekday afternoons",
+      weekday_evenings: "Weekday evenings",
+      weekends: "Weekends",
+    },
+    confirmation: {
+      body: "We have your information. Someone will reach out within three business days.",
+    },
+  },
 } as const;
 
 /** Fills `{key}` placeholders in a copy string, e.g. format(COPY.home.greeting, { firstName: "Denise" }). */
