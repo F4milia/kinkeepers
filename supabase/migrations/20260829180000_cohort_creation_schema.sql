@@ -110,6 +110,14 @@ create table sessions (
   -- whoever delivered it").
   substitute_facilitator_id uuid references profiles (id),
   video_meeting_id text,
+  -- Zoom's own id for THIS specific occurrence within the recurring
+  -- meeting (distinct from video_meeting_id, which is the whole
+  -- recurring series) - required to reschedule or cancel one session's
+  -- Zoom occurrence without touching the other sessions in the same
+  -- cohort. Captured when the recurring meeting is first created
+  -- (lib/zoom/meeting.ts's response includes an occurrences array), not
+  -- something that can be derived after the fact.
+  video_occurrence_id text,
   video_join_url text,
   video_passcode text,
   video_dial_in_number text,

@@ -56,6 +56,17 @@ export interface CreatedMeeting {
    * turns out wrong once real credentials exist.
    */
   dialInPin: string | null;
+  /**
+   * Zoom's own id for each occurrence in the recurring series, ordered by
+   * start_time (which matches session_number order, since sessions run in
+   * a fixed cadence). Each is required later to reschedule or cancel that
+   * one session's Zoom occurrence without touching the rest of the
+   * series, via PATCH /meetings/{meetingId}/occurrences/{occurrence_id}.
+   * Empty when Zoom returns no occurrences array (e.g. a non-recurring
+   * meeting), which should not happen for this function's request but is
+   * not assumed.
+   */
+  occurrenceIds: string[];
 }
 
 interface ZoomCreateMeetingResponse {
@@ -66,6 +77,7 @@ interface ZoomCreateMeetingResponse {
   settings?: {
     global_dial_in_numbers?: Array<{ number: string; type: string; country: string }>;
   };
+  occurrences?: Array<{ occurrence_id: string; start_time: string }>;
 }
 
 export async function createRecurringMeeting(
@@ -103,12 +115,17 @@ export async function createRecurringMeeting(
 
   const body = (await response.json()) as ZoomCreateMeetingResponse;
 
+  const occurrenceIds = [...(body.occurrences ?? [])]
+    .sort((a, b) => a.start_time.localeCompare(b.start_time))
+    .map((occurrence) => occurrence.occurrence_id);
+
   return {
     meetingId: String(body.id),
     joinUrl: body.join_url,
     passcode: body.password,
     dialInNumber: body.settings?.global_dial_in_numbers?.[0]?.number ?? null,
     dialInPin: body.h323_password ?? body.password ?? null,
+    occurrenceIds,
   };
 }
 

@@ -4,7 +4,7 @@
 -- cohorts and sessions.
 
 begin;
-select plan(15);
+select plan(16);
 
 insert into programs (id, name, developer, session_count, session_duration_minutes, delivery_formats, languages, facilitator_qualification, license_status) values
   ('99999999-0000-0000-0000-00000000c001', 'pgTAP A3 Licensed', 'Test Developer', 6, 90, array['video'], array['English'], 'Lay leader', 'licensed'),
@@ -25,14 +25,14 @@ update profiles set role = 'facilitator' where id = '66666666-0000-0000-0000-000
 -- program licensing trigger
 select throws_ok(
   $$ insert into cohorts (name, grouping_description, capacity, cadence, meeting_day_of_week, meeting_time, time_zone, program_id)
-     values ('Bad Cohort', 'x', 5, 'Weekly', 2, '18:00', 'America/New_York', '99999999-0000-0000-0000-00000000c002') $$,
+     values ('Bad Cohort', 'x', 5, 'weekly', 2, '18:00', 'America/New_York', '99999999-0000-0000-0000-00000000c002') $$,
   null, 'program 99999999-0000-0000-0000-00000000c002 is not licensed - cohorts may only run on licensed programs',
   'creating a cohort on a not_licensed program raises'
 );
 
 select lives_ok(
   $$ insert into cohorts (id, name, grouping_description, capacity, cadence, meeting_day_of_week, meeting_time, time_zone, program_id)
-     values ('77777777-0000-0000-0000-00000000c001', 'Good Cohort', 'x', 5, 'Weekly', 2, '18:00', 'America/New_York', '99999999-0000-0000-0000-00000000c001') $$,
+     values ('77777777-0000-0000-0000-00000000c001', 'Good Cohort', 'x', 5, 'weekly', 2, '18:00', 'America/New_York', '99999999-0000-0000-0000-00000000c001') $$,
   'creating a cohort on a licensed program succeeds'
 );
 
@@ -93,8 +93,14 @@ select is(
 reset role;
 
 -- sessions: substitute-facilitator trigger + RLS
-insert into sessions (id, cohort_id, session_number, scheduled_at)
-values ('55555555-0000-0000-0000-00000000c001', '77777777-0000-0000-0000-00000000c001', 1, now() + interval '7 days');
+insert into sessions (id, cohort_id, session_number, scheduled_at, video_occurrence_id)
+values ('55555555-0000-0000-0000-00000000c001', '77777777-0000-0000-0000-00000000c001', 1, now() + interval '7 days', 'zoom-occ-1');
+
+select is(
+  (select video_occurrence_id from sessions where id = '55555555-0000-0000-0000-00000000c001'),
+  'zoom-occ-1',
+  'video_occurrence_id stores the Zoom occurrence id needed to reschedule this specific session'
+);
 
 select throws_ok(
   format(

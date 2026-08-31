@@ -3,6 +3,7 @@ import {
   nextMeetingInstant,
   formatMeetingTime,
   describeCohortMeetingForApplicant,
+  generateSessionInstants,
   type CohortMeetingSlot,
 } from "@/lib/admin/cohort-meeting-time";
 
@@ -81,5 +82,56 @@ describe("named edge case: Honolulu applicant, Eastern cohort, across a DST-chan
       winterFrom,
     );
     expect(description).toMatch(/^Tuesday, 1:30\s?PM HST your time \(Tuesday, 6:30\s?PM EST for the group\)$/);
+  });
+});
+
+describe("generateSessionInstants", () => {
+  const DAY_MS = 24 * 60 * 60 * 1000;
+
+  it("generates the requested count, 7 days apart for weekly cadence", () => {
+    const instants = generateSessionInstants("18:30", "America/New_York", "2027-01-05", 7, 6);
+    expect(instants).toHaveLength(6);
+    for (let i = 1; i < instants.length; i++) {
+      const diffDays = (instants[i].getTime() - instants[i - 1].getTime()) / DAY_MS;
+      // Tolerant of a 1-hour DST shift landing between two consecutive
+      // sessions (checked explicitly by the DST test below) - a plain
+      // scheduling error (wrong cadence entirely) would be off by a full
+      // day or more, well outside this range.
+      expect(diffDays).toBeGreaterThan(6.9);
+      expect(diffDays).toBeLessThan(7.1);
+    }
+  });
+
+  it("uses 14-day spacing for biweekly cadence", () => {
+    const instants = generateSessionInstants("18:30", "America/New_York", "2027-01-05", 14, 3);
+    expect(instants).toHaveLength(3);
+    const diffDays = (instants[1].getTime() - instants[0].getTime()) / DAY_MS;
+    expect(diffDays).toBeGreaterThan(13.9);
+    expect(diffDays).toBeLessThan(14.1);
+  });
+
+  it("keeps the wall-clock time correct in the cohort's own zone across a real DST transition", () => {
+    // Six weekly sessions from mid-February through late March span the
+    // actual US spring-forward transition, whichever exact Sunday it
+    // falls on in a given year - each instant is computed independently
+    // (not by adding milliseconds to the previous one), so every session
+    // should still read 6:30 PM in Eastern regardless of which side of
+    // the transition it lands on.
+    const instants = generateSessionInstants("18:30", "America/New_York", "2027-02-16", 7, 6);
+    for (const instant of instants) {
+      expect(formatMeetingTime(instant, "America/New_York")).toContain("6:30");
+    }
+  });
+
+  it("starts on the given first session date, not the next occurrence of some weekday", () => {
+    const instants = generateSessionInstants("18:30", "America/New_York", "2027-03-10", 7, 1);
+    const parts = new Intl.DateTimeFormat("en-US", {
+      timeZone: "America/New_York",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).formatToParts(instants[0]);
+    const get = (type: string) => parts.find((p) => p.type === type)?.value;
+    expect(`${get("year")}-${get("month")}-${get("day")}`).toBe("2027-03-10");
   });
 });
