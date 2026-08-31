@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { createRecurringMeeting } from "@/lib/zoom/meeting";
+import { createRecurringMeeting, rescheduleMeetingOccurrence, cancelMeetingOccurrence } from "@/lib/zoom/meeting";
 
 // Injected mock fetch, not a global stub - see lib/zoom/client.test.ts for
 // why (cross-file global pollution, reproduced and fixed in PR1).
@@ -169,5 +169,43 @@ describe("createRecurringMeeting", () => {
 
     const [tokenUrl] = fetchMock.mock.calls[0];
     expect(tokenUrl).toContain(`account_id=${partnerCredentials.accountId}`);
+  });
+});
+
+function mockZoomActionFetch() {
+  return vi
+    .fn()
+    .mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ access_token: "tok", expires_in: 3600 }) })
+    .mockResolvedValueOnce({ ok: true, status: 204, json: async () => ({}) });
+}
+
+describe("rescheduleMeetingOccurrence", () => {
+  it("PATCHes the specific occurrence with the new start time, leaving other occurrences untouched", async () => {
+    const fetchMock = mockZoomActionFetch();
+
+    await rescheduleMeetingOccurrence(
+      "123456789",
+      "occ-2",
+      "2027-03-16T19:00:00Z",
+      freshCredentials(),
+      fetchMock as unknown as typeof fetch,
+    );
+
+    const [url, init] = fetchMock.mock.calls[1];
+    expect(url).toContain("/meetings/123456789/occurrences/occ-2");
+    expect(init.method).toBe("PATCH");
+    expect(JSON.parse(init.body as string)).toEqual({ start_time: "2027-03-16T19:00:00Z" });
+  });
+});
+
+describe("cancelMeetingOccurrence", () => {
+  it("DELETEs only the specific occurrence via the occurrence_id query param", async () => {
+    const fetchMock = mockZoomActionFetch();
+
+    await cancelMeetingOccurrence("123456789", "occ-2", freshCredentials(), fetchMock as unknown as typeof fetch);
+
+    const [url, init] = fetchMock.mock.calls[1];
+    expect(url).toContain("/meetings/123456789?occurrence_id=occ-2");
+    expect(init.method).toBe("DELETE");
   });
 });
