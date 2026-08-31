@@ -22,17 +22,28 @@ interface SessionVideoDetails {
   videoOccurrenceId: string | null;
 }
 
-async function getSessionVideoDetails(
-  admin: SupabaseClient,
-  sessionId: string,
-): Promise<SessionVideoDetails | null> {
+type SessionLookupResult =
+  | { found: true; session: SessionVideoDetails }
+  | { found: false; error: string };
+
+// A real query error (e.g. schema drift - a column the code expects
+// doesn't actually exist on this database) is surfaced with its own
+// message, never collapsed into "Session not found." - that message is
+// reserved for when the row genuinely doesn't exist, so an admin (or
+// whoever's debugging with them) isn't misled into looking for a missing
+// row when the actual problem is a missing column.
+async function lookUpSessionVideoDetails(admin: SupabaseClient, sessionId: string): Promise<SessionLookupResult> {
   const { data, error } = await admin
     .from("sessions")
     .select("cohort_id, video_meeting_id, video_occurrence_id")
     .eq("id", sessionId)
     .maybeSingle();
-  if (error || !data) return null;
-  return { cohortId: data.cohort_id, videoMeetingId: data.video_meeting_id, videoOccurrenceId: data.video_occurrence_id };
+  if (error) return { found: false, error: error.message };
+  if (!data) return { found: false, error: "Session not found." };
+  return {
+    found: true,
+    session: { cohortId: data.cohort_id, videoMeetingId: data.video_meeting_id, videoOccurrenceId: data.video_occurrence_id },
+  };
 }
 
 export async function rescheduleSessionAction(
@@ -45,8 +56,9 @@ export async function rescheduleSessionAction(
   const { userId } = await requireRole(["admin"], callerClient);
   const admin = createAdminClient();
 
-  const session = await getSessionVideoDetails(admin, sessionId);
-  if (!session) return { success: false, error: "Session not found." };
+  const lookup = await lookUpSessionVideoDetails(admin, sessionId);
+  if (!lookup.found) return { success: false, error: lookup.error };
+  const session = lookup.session;
 
   let zoomWarning: string | undefined;
   if (session.videoMeetingId && session.videoOccurrenceId) {
@@ -87,8 +99,9 @@ export async function cancelSessionAction(
   const { userId } = await requireRole(["admin"], callerClient);
   const admin = createAdminClient();
 
-  const session = await getSessionVideoDetails(admin, sessionId);
-  if (!session) return { success: false, error: "Session not found." };
+  const lookup = await lookUpSessionVideoDetails(admin, sessionId);
+  if (!lookup.found) return { success: false, error: lookup.error };
+  const session = lookup.session;
 
   let zoomWarning: string | undefined;
   if (session.videoMeetingId && session.videoOccurrenceId) {
@@ -131,8 +144,9 @@ export async function recordSessionSubstituteAction(
   const { userId } = await requireRole(["admin"], callerClient);
   const admin = createAdminClient();
 
-  const session = await getSessionVideoDetails(admin, sessionId);
-  if (!session) return { success: false, error: "Session not found." };
+  const lookup = await lookUpSessionVideoDetails(admin, sessionId);
+  if (!lookup.found) return { success: false, error: lookup.error };
+  const session = lookup.session;
 
   const { error } = await admin.rpc("record_session_substitute", {
     actor_id: userId,
