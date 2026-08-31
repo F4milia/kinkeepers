@@ -4,7 +4,7 @@
 -- cohorts and sessions.
 
 begin;
-select plan(15);
+select plan(16);
 
 insert into programs (id, name, developer, session_count, session_duration_minutes, delivery_formats, languages, facilitator_qualification, license_status) values
   ('99999999-0000-0000-0000-00000000c001', 'pgTAP A3 Licensed', 'Test Developer', 6, 90, array['video'], array['English'], 'Lay leader', 'licensed'),
@@ -93,8 +93,14 @@ select is(
 reset role;
 
 -- sessions: substitute-facilitator trigger + RLS
-insert into sessions (id, cohort_id, session_number, scheduled_at)
-values ('55555555-0000-0000-0000-00000000c001', '77777777-0000-0000-0000-00000000c001', 1, now() + interval '7 days');
+insert into sessions (id, cohort_id, session_number, scheduled_at, video_occurrence_id)
+values ('55555555-0000-0000-0000-00000000c001', '77777777-0000-0000-0000-00000000c001', 1, now() + interval '7 days', 'zoom-occ-1');
+
+select is(
+  (select video_occurrence_id from sessions where id = '55555555-0000-0000-0000-00000000c001'),
+  'zoom-occ-1',
+  'video_occurrence_id stores the Zoom occurrence id needed to reschedule this specific session'
+);
 
 select throws_ok(
   format(
