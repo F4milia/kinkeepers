@@ -71,3 +71,62 @@ for (const path of CAREGIVER_ROUTES) {
     await expect(page).toHaveURL(/\/sign-in$/);
   });
 }
+
+// L2: the real flow end to end, against the real backend (not mocked) -
+// landing -> Start creates a real applicant row -> the 3-step intake form
+// -> confirmation. This is a genuine interaction test, not a render check,
+// since a multi-step form with save-on-blur has real behavior to break.
+test("L2: full referral and intake flow completes", async ({ page }) => {
+  const pageErrors: Error[] = [];
+  page.on("pageerror", (error) => pageErrors.push(error));
+
+  await page.goto("/refer/riverside-health");
+  await page.getByRole("button", { name: "Start" }).click();
+
+  await expect(page).toHaveURL(/\/intake\/[0-9a-f-]+$/);
+  await expect(page.getByText("Step 1 of 3")).toBeVisible();
+
+  await page.getByLabel("First name").fill("Jordan");
+  await page.getByLabel("Last name").fill("Rivera");
+  await page.getByLabel("Email").fill("jordan.rivera@example.com");
+  await page.getByLabel("Phone").fill("555-0100");
+  await page.getByLabel("Phone").blur();
+  await expect(page.getByText("We saved your answers.")).toBeVisible();
+
+  await page.getByRole("button", { name: "Continue" }).click();
+  await expect(page.getByText("Step 2 of 3")).toBeVisible();
+
+  await page.getByLabel("Your relationship to the person you care for").fill("Daughter");
+  await page.getByText("I'm not sure").click();
+  await page.getByText("Eastern", { exact: true }).click();
+
+  await page.getByRole("button", { name: "Continue" }).click();
+  await expect(page.getByText("Step 3 of 3")).toBeVisible();
+
+  await page.getByText("Weekday evenings").click();
+  await page.getByText("Either").click();
+
+  await page.getByRole("button", { name: "Continue" }).click();
+  await expect(page.getByText("We have your information.")).toBeVisible();
+  expect(pageErrors).toEqual([]);
+});
+
+// Same edge case P2's own test suite already covers at the data layer
+// (lib/referral/intake-progress.test.ts) - here it's the actual UI: close
+// the tab mid-form, come back via the resume URL, see the same data.
+test("L2: resuming via the intake URL directly shows previously saved answers", async ({
+  page,
+}) => {
+  await page.goto("/refer/riverside-health");
+  await page.getByRole("button", { name: "Start" }).click();
+  await expect(page).toHaveURL(/\/intake\/[0-9a-f-]+$/);
+  const intakeUrl = page.url();
+
+  await page.getByLabel("First name").fill("Casey");
+  await page.getByLabel("First name").blur();
+  await expect(page.getByText("We saved your answers.")).toBeVisible();
+
+  await page.goto("about:blank");
+  await page.goto(intakeUrl);
+  await expect(page.getByLabel("First name")).toHaveValue("Casey");
+});

@@ -32,17 +32,31 @@ function getResendClient(): Resend {
 export async function sendResumeEmail(email: string, resumeToken: string, applicantId: string) {
   const resumeUrl = `${process.env.NEXT_PUBLIC_SITE_URL}/intake/resume?token=${resumeToken}`;
 
-  const { error } = await getResendClient().emails.send({
-    from: process.env.RESEND_FROM_EMAIL!,
-    to: email,
-    subject: "Continue your KinKeepers application",
-    html: `<p>You can pick up where you left off here: <a href="${resumeUrl}">${resumeUrl}</a></p>`,
-  });
+  // No RESEND_API_KEY configured (true in every environment as of this
+  // writing - confirmed against the live Vercel project) is not an
+  // exceptional case here, it's the current normal one. The Resend SDK's
+  // constructor throws synchronously on a missing key, which the `if
+  // (error)` check below can't catch (that only covers an error returned
+  // FROM .emails.send(), not a throw before it's ever called) - so without
+  // this try/catch, providing an email during intake would fail the whole
+  // saveIntakeProgress call for every caregiver, everywhere, right now.
+  // Same credential-gap treatment as Zoom/Sentry/Twilio elsewhere in this
+  // codebase: log and no-op rather than crash the feature it's attached to.
+  try {
+    const { error } = await getResendClient().emails.send({
+      from: process.env.RESEND_FROM_EMAIL!,
+      to: email,
+      subject: "Continue your KinKeepers application",
+      html: `<p>You can pick up where you left off here: <a href="${resumeUrl}">${resumeUrl}</a></p>`,
+    });
 
-  if (error) {
+    if (error) {
+      logError("intake_resume_email_failed", { applicant_id: applicantId });
+      return;
+    }
+
+    log("intake_resume_email_sent", { applicant_id: applicantId });
+  } catch {
     logError("intake_resume_email_failed", { applicant_id: applicantId });
-    return;
   }
-
-  log("intake_resume_email_sent", { applicant_id: applicantId });
 }
