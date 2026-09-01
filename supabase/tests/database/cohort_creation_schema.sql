@@ -56,6 +56,14 @@ select throws_ok(
   'assigning a non-facilitator profile as a cohort''s facilitator raises'
 );
 
+-- A4-cert: cohorts.program_id + facilitator_id now require a current
+-- certification (enforce_cohort_program_and_facilitator()) - without
+-- this row, the assignment below would throw before this file's own
+-- assertions (and everything downstream that depends on facilitator_id
+-- actually being set) ever ran.
+insert into facilitator_certifications (facilitator_id, program_id, certified_on, expires_on, certifying_body) values
+  ('66666666-0000-0000-0000-00000000a002', '99999999-0000-0000-0000-00000000c001', current_date - 30, current_date + 300, 'pgTAP Certifying Body');
+
 select lives_ok(
   format(
     $$ update cohorts set facilitator_id = %L where id = '77777777-0000-0000-0000-00000000c001' $$,

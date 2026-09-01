@@ -105,6 +105,21 @@ describe("session management actions", () => {
     if (programError || !program) throw programError ?? new Error("failed to create program");
     programId = program.id;
 
+    // A4-cert: cohorts.program_id + facilitator_id now require a current
+    // certification - without this, the cohort insert below would fail
+    // at the trigger before this file's own assertions ever ran. Only
+    // facilitatorUser needs one - otherFacilitatorUser is only ever used
+    // as a session-level substitute, which this trigger (on cohorts, not
+    // sessions) doesn't check.
+    const { error: certError } = await admin.from("facilitator_certifications").insert({
+      facilitator_id: facilitatorUser.id,
+      program_id: programId,
+      certified_on: new Date(Date.now() - 30 * 86_400_000).toISOString().slice(0, 10),
+      expires_on: new Date(Date.now() + 300 * 86_400_000).toISOString().slice(0, 10),
+      certifying_body: "Vitest Certifying Body",
+    });
+    if (certError) throw certError;
+
     const { data: cohort, error: cohortError } = await admin
       .from("cohorts")
       .insert({
