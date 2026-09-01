@@ -58,6 +58,16 @@ export const ADMIN_NAV_ITEMS: AdminNavItem[] = [
     // surface in an admin view").
     allowedRoles: ["admin"],
   },
+  {
+    href: "/admin/facilitators",
+    label: () => "Facilitators",
+    // Admin-only - certification data and enforcement details aren't
+    // something a facilitator needs a nav entry for to see their own
+    // (they don't have a self-service view yet; that's F2/F3's job),
+    // and partner_staff has no reason to see certification status at
+    // all per A1's persona table.
+    allowedRoles: ["admin"],
+  },
 ];
 
 export function navItemsForRole(role: AppRole): AdminNavItem[] {

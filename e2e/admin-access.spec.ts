@@ -35,6 +35,11 @@ const ADMIN_ROUTES = [
   // check, so an unauthenticated visitor gets the refusal without ever
   // needing this id to resolve to a real row.
   "/admin/partners/00000000-0000-0000-0000-000000000000/edit",
+  "/admin/facilitators",
+  // getFacilitatorDetail's own requireRole call runs before its
+  // not-found check, same reasoning as the applicant/partner-edit
+  // routes above.
+  "/admin/facilitators/00000000-0000-0000-0000-000000000000",
 ];
 
 for (const path of ADMIN_ROUTES) {
