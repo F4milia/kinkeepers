@@ -29,6 +29,7 @@ Supabase (Postgres, Auth, RLS, Realtime, Storage) · Inngest (jobs) · Resend (e
 4. Touch only files in this session's scope. Needing a file outside it — especially migrations, auth, RLS, Zoom settings, another session's surface — means STOP and report which file and why. Do not proceed.
 5. Every PR description lists: (a) every file modified, (b) any acceptance criterion not satisfied and why, (c) every assumption the prompt didn't specify.
 6. Never delete or weaken an existing test to make a change pass.
+7. Before opening the PR, create `docs/qa/<SESSION_ID>.md` from `docs/qa/TEMPLATE.md` (Ivan's qa-previous-session-sop.md, adapted for this repo — see that doc's own note on why it departs from ZeroStep). Expand this session's line from the run doc's "Named edge-case register" into numbered steps with concrete expected results, referencing only fixtures already listed in `docs/qa/FIXTURES.md` — add a fixture there in the same PR if a step needs one that doesn't exist yet, rather than inventing an ad-hoc one. Add a "Regression" section naming the 2-3 behaviors from the previous two sessions most likely disturbed by this change. Cap at 15 steps. A manual step that has passed QA twice in a row graduates into a Playwright test in `e2e/` instead of staying a manual step forever.
 
 ## Design constraints — every member/facilitator screen
 

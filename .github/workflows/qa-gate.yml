@@ -1,0 +1,20 @@
+name: qa-gate
+# Ivan's qa-previous-session-sop.md: manual QA of the previous session
+# happens while the next one generates, timestamped by this check. Adds
+# the `skip-qa` label to a PR (docs-only/chore, nothing to click through)
+# to bypass it instead of leaving the QA block empty.
+on:
+  pull_request:
+    types: [opened, edited, synchronize, labeled, unlabeled]
+
+jobs:
+  gate:
+    if: ${{ !contains(github.event.pull_request.labels.*.name, 'skip-qa') }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require a Loom link and a checked QA box
+        env:
+          BODY: ${{ github.event.pull_request.body }}
+        run: |
+          echo "$BODY" | grep -Eq 'https://(www\.)?loom\.com/share/' || { echo "::error::No Loom link in PR body. Add one, or label this PR skip-qa if there's nothing to click through."; exit 1; }
+          echo "$BODY" | grep -Eq '\- \[x\] `docs/qa/' || { echo "::error::QA doc not marked executed (checkbox for \`docs/qa/<SESSION>.md executed...\` is unchecked). Label skip-qa if there's nothing to click through."; exit 1; }

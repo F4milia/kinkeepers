@@ -151,7 +151,7 @@ insert into sessions (id, cohort_id, session_number, scheduled_at, video_join_ur
 -- "enrolled, before session one" and "completed" - seeded with fixed ids
 -- so e2e/smoke.spec.ts can visit them directly. The "waitlisted" (pending
 -- review, no matching cohort) state from the old fixture-driven UI is not
--- seeded here: hasMatchingCohort is hardcoded false in lib/data.ts
+-- seeded here: hasMatchingCohort is hardcoded true in lib/data.ts
 -- (confirmed with Ferenz - no real matching signal exists), so every
 -- pending_review applicant now renders "waiting for review" and that
 -- second branch is unreachable with real data.
