@@ -138,6 +138,12 @@ export const COPY = {
       schedule: "Schedule",
     },
     home: {
+      // L5: no facilitator display name exists anywhere in the schema
+      // yet (profiles has no name column) - confirmed with Ferenz as
+      // part of this session's own scope decisions. Used only when
+      // getFacilitatorViewer() has no real name to fill into
+      // COPY.home.greeting's template.
+      greeting_generic: "Hello",
       next_session: "Your next session",
       needs_log: "Needs a log",
       cohorts_title: "Your cohorts",
@@ -255,6 +261,48 @@ export const COPY = {
     consented_on: "Agreed {date}",
     all_done: "You're up to date on your agreements.",
     discussion_line: "What's shared here stays here.",
+  },
+  /**
+   * L5 (API integration and error states). network.headline/body is
+   * quoted directly from the L5 prompt ("We couldn't load this. Check
+   * your connection and try again."). auth_expired, not_found, server,
+   * and the two not-yet-available placeholders were confirmed with
+   * Ferenz first - the prompt described what each state needs to do
+   * ("a plain explanation," "explain what happened," "apologize once,
+   * plainly") without giving literal text, and facilitator_not_yet_
+   * available/discussion_not_yet_available cover two real schema gaps
+   * (no facilitator name/bio column, no discussion board table) found
+   * while scoping this session, also confirmed with Ferenz rather than
+   * invented solo.
+   */
+  errors: {
+    network: {
+      headline: "We couldn't load this.",
+      body: "Check your connection and try again.",
+      retry: "Try again",
+    },
+    auth_expired: {
+      headline: "You've been signed out",
+      body: "Sign in again to keep going.",
+      sign_in: "Sign in",
+    },
+    not_found: {
+      headline: "We couldn't find that.",
+      body: "It may have moved, or the link may be out of date.",
+      go_home: "Go to Home",
+    },
+    server: {
+      headline: "Something went wrong on our end.",
+      body: "We're sorry. Call us if this keeps happening.",
+    },
+    call_for_help: "Call {phoneNumber}",
+    offline: {
+      headline: "You're offline",
+      body: "Showing what was last saved. Reconnect to see the latest.",
+    },
+    facilitator_not_yet_available:
+      "Facilitator details aren't available here yet. Call us if you need to reach your facilitator.",
+    discussion_not_yet_available: "Discussion isn't available here yet.",
   },
 } as const;
 

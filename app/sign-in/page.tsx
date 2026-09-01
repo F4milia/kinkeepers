@@ -18,6 +18,7 @@ export default async function SignInPage({
   if (role) redirect("/");
 
   const { error } = await searchParams;
+  const sessionExpired = error === "session_expired";
   const cookieStore = await cookies();
   const cookieTheme = cookieStore.get(THEME_COOKIE)?.value;
   const theme: Theme = isTheme(cookieTheme) ? cookieTheme : "light";
@@ -29,7 +30,7 @@ export default async function SignInPage({
         <SupportAffordance />
       </header>
       <main className="mx-auto flex w-full max-w-content flex-1 flex-col justify-center px-4 pb-16">
-        <SignInForm linkInvalid={error === "link_invalid"} />
+        <SignInForm linkInvalid={error === "link_invalid"} sessionExpired={sessionExpired} />
       </main>
     </div>
   );

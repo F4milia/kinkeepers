@@ -1,7 +1,7 @@
 "use client";
 
 import { COPY } from "@/lib/copy";
-import type { AttendanceStatus } from "@/lib/fixtures";
+import type { AttendanceStatus } from "@/lib/types";
 
 export type { AttendanceStatus };
 

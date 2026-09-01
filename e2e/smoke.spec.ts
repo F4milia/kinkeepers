@@ -1,9 +1,10 @@
 import { test, expect } from "@playwright/test";
 
-// Every page that exists today renders from lib/fixtures (no real backend
-// yet - L5, Wave 8, swaps that). This just proves each one actually
-// renders without crashing; it's not testing product behavior, since
-// there's no real interactive flow to exercise yet.
+// L5: most pages here now render from real endpoints (lib/data.ts), not
+// lib/fixtures - the applicant-status ids below are real rows seeded in
+// supabase/seed.sql specifically for this file, not fixture slugs. This
+// still just proves each one renders without a client-side error, not
+// full product behavior.
 //
 // /components (the dev-only component gallery) is deliberately excluded
 // here and covered separately below - it's not supposed to render in a
@@ -17,16 +18,22 @@ import { test, expect } from "@playwright/test";
 // unauthenticated-redirect block below) - as of L1 they require a real
 // signed-in session, so an unauthenticated Playwright visitor would just
 // be redirected to /sign-in, making "renders without a client-side error"
-// silently test the wrong page. (applicant)/(facilitator) stay here - L1
-// only gated the caregiver route group, not those demo surfaces.
+// silently test the wrong page. /facilitator moved to that same block in
+// L5, once it got the same auth gate (it had none before - see
+// lib/data.ts's PR description). (applicant) stays here - that route is
+// deliberately pre-auth by design (see lib/data.ts's getApplicant).
+//
+// The old fixture-only "waitlisted" (pending review, no matching cohort)
+// state isn't seeded or tested here anymore: hasMatchingCohort is
+// hardcoded false in lib/data.ts (confirmed with Ferenz - no real
+// matching signal exists without inventing one near CLAUDE.md's
+// no-auto-matcher invariant), so every pending_review applicant renders
+// "waiting for review" now and that branch is unreachable with real data.
 const PAGES = [
   { path: "/sign-in", name: "sign-in" },
-  { path: "/status/applicant-waiting-review", name: "applicant status — waiting for review" },
-  { path: "/status/applicant-waitlisted", name: "applicant status — waitlisted" },
-  { path: "/status/applicant-assigned", name: "applicant status — assigned" },
-  { path: "/status/applicant-complete", name: "applicant status — program complete" },
-  { path: "/facilitator", name: "facilitator home" },
-  { path: "/facilitator/schedule", name: "facilitator schedule" },
+  { path: "/status/88888888-0000-0000-0000-000000000001", name: "applicant status — waiting for review" },
+  { path: "/status/88888888-0000-0000-0000-000000000502", name: "applicant status — assigned" },
+  { path: "/status/88888888-0000-0000-0000-000000000503", name: "applicant status — program complete" },
   { path: "/refer/riverside-health", name: "referral landing — valid partner slug" },
   { path: "/refer/not-a-real-slug", name: "referral landing — invalid partner slug" },
 ];
@@ -58,7 +65,25 @@ for (const { path, name } of PAGES) {
 // isn't covered here - there's no Playwright infrastructure yet for a
 // real signed-in browser context (same limitation admin-access.spec.ts
 // notes for /admin's wrong-role case).
-const CAREGIVER_ROUTES = ["/", "/cohort", "/discussion", "/session/session-005", "/components", "/consent"];
+//
+// L5: /facilitator and /facilitator/schedule joined this list - that
+// route had no auth gate at all before this session (anyone could load
+// it), a real gap closed alongside wiring real per-facilitator data
+// through it (see lib/data.ts's PR description). The signed-in
+// wrong-role case for /facilitator (e.g. a real member hitting it, which
+// renders not-found rather than redirecting - see app/facilitator/
+// layout.tsx) has the same "no real signed-in browser context yet"
+// limitation as the admin wrong-role case above, so isn't covered here.
+const CAREGIVER_ROUTES = [
+  "/",
+  "/cohort",
+  "/discussion",
+  "/session/session-005",
+  "/components",
+  "/consent",
+  "/facilitator",
+  "/facilitator/schedule",
+];
 
 for (const path of CAREGIVER_ROUTES) {
   test(`${path} redirects an unauthenticated visitor to /sign-in`, async ({ page }) => {

@@ -17,7 +17,14 @@ type FormState = { status: "idle" } | SentState;
 // currently lands on the same fixture-driven Home as everyone else after
 // verifying (L2's intake doesn't exist yet to route to instead) - flagged
 // in this PR's description, not silently patched over here.
-export function SignInForm({ linkInvalid }: { linkInvalid: boolean }) {
+export function SignInForm({
+  linkInvalid,
+  sessionExpired = false,
+}: {
+  linkInvalid: boolean;
+  /** L5: routed here from (caregiver)/facilitator's layout when a real, previously-valid session is no longer valid - see lib/auth/roles.ts's getSignedOutReason. */
+  sessionExpired?: boolean;
+}) {
   const [email, setEmail] = useState("");
   const [state, setState] = useState<FormState>({ status: "idle" });
   const [error, setError] = useState<string | null>(null);
@@ -82,7 +89,11 @@ export function SignInForm({ linkInvalid }: { linkInvalid: boolean }) {
       }}
       className="flex flex-col gap-4"
     >
-      <h1 className="text-h2">{COPY.sign_in.title}</h1>
+      <h1 className="text-h2">{sessionExpired ? COPY.errors.auth_expired.headline : COPY.sign_in.title}</h1>
+
+      {sessionExpired ? (
+        <p className="text-body font-ui text-ink-soft">{COPY.errors.auth_expired.body}</p>
+      ) : null}
 
       {showLinkInvalid ? (
         <p className="text-body font-ui text-ink" role="alert">

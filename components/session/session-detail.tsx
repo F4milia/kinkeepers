@@ -8,7 +8,7 @@ import { JoinAction } from "@/components/session/join-action";
 import { DeliveryBadge } from "@/components/session/delivery-badge";
 import { COPY, format } from "@/lib/copy";
 import { formatSessionDay, formatSessionTimeRange } from "@/lib/format-date";
-import type { Session } from "@/lib/fixtures";
+import type { Session } from "@/lib/types";
 
 export interface SessionDetailProps {
   session: Session;

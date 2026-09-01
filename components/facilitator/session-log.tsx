@@ -10,7 +10,7 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { TextArea } from "@/components/ui/text-area";
 import { COPY, format } from "@/lib/copy";
 import { formatLongDate, formatSessionDay } from "@/lib/format-date";
-import type { CohortMember, Session } from "@/lib/fixtures";
+import type { CohortMember, Session } from "@/lib/types";
 
 const STATUS_LABEL: Record<AttendanceStatus, string> = {
   present: COPY.log.present,

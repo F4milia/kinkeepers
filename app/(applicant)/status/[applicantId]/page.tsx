@@ -5,7 +5,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { COPY, format } from "@/lib/copy";
 import { getApplicant } from "@/lib/data";
 import { formatSessionDay } from "@/lib/format-date";
-import type { Applicant } from "@/lib/fixtures";
+import type { Applicant } from "@/lib/types";
 
 // L4 | one route, four states, driven by Applicant.status (and
 // hasMatchingCohort for the two pending_review variants). No gamification
@@ -16,7 +16,7 @@ export default async function ApplicantStatusPage({
   params: Promise<{ applicantId: string }>;
 }) {
   const { applicantId } = await params;
-  const applicant = getApplicant(applicantId);
+  const applicant = await getApplicant(applicantId);
   if (!applicant) notFound();
 
   if (applicant.status === "pending_review") {
@@ -75,9 +75,11 @@ function AssignedBeforeSessionOne({ applicant }: { applicant: Applicant }) {
           </p>
         </div>
 
-        <p className="text-body font-ui text-ink">
-          {COPY.applicant.assigned.facilitator_label}: {session.facilitatorFirstName}
-        </p>
+        {session.facilitatorFirstName ? (
+          <p className="text-body font-ui text-ink">
+            {COPY.applicant.assigned.facilitator_label}: {session.facilitatorFirstName}
+          </p>
+        ) : null}
 
         {session.joinUrl ? (
           <a

@@ -15,16 +15,22 @@ import { formatSessionDay } from "@/lib/format-date";
 // F1 Home | next session (with join action), sessions needing a log
 // (the nudge that keeps delivery evidence complete — second thing shown,
 // per the prompt), then the facilitator's own cohorts with position.
-export default function FacilitatorHomePage() {
-  const viewer = getFacilitatorViewer();
-  const nextSession = getNextFacilitatorSession();
-  const nextSessionCohort = nextSession ? getCohort(nextSession.cohortId) : undefined;
-  const needingLog = getFacilitatorSessionsNeedingLog();
-  const cohorts = getFacilitatorCohorts();
+export default async function FacilitatorHomePage() {
+  const viewer = await getFacilitatorViewer();
+  const nextSession = await getNextFacilitatorSession();
+  const nextSessionCohort = nextSession ? await getCohort(nextSession.cohortId) : undefined;
+  const needingLog = await getFacilitatorSessionsNeedingLog();
+  const cohorts = await getFacilitatorCohorts();
+  const needingLogCohorts = await Promise.all(needingLog.map((session) => getCohort(session.cohortId)));
 
   return (
     <div className="flex flex-col gap-section">
-      <h1 className="text-h2">{format(COPY.home.greeting, { firstName: viewer.firstName })}</h1>
+      {/* No facilitator display name exists anywhere in the schema yet
+          (see lib/data.ts's header comment) - a plain greeting rather
+          than a fabricated name. */}
+      <h1 className="text-h2">
+        {viewer.firstName ? format(COPY.home.greeting, { firstName: viewer.firstName }) : COPY.facilitator.home.greeting_generic}
+      </h1>
 
       <section aria-labelledby="next-session-heading" className="flex flex-col gap-3">
         <h2 id="next-session-heading" className="text-h3">
@@ -59,8 +65,8 @@ export default function FacilitatorHomePage() {
         </h2>
         {needingLog.length > 0 ? (
           <ul className="flex flex-col gap-3">
-            {needingLog.map((session) => {
-              const cohort = getCohort(session.cohortId);
+            {needingLog.map((session, index) => {
+              const cohort = needingLogCohorts[index];
               return (
                 <li key={session.id}>
                   <Card interactive href={`/session/${session.id}`}>
