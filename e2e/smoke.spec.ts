@@ -25,15 +25,20 @@ import { test, expect } from "@playwright/test";
 //
 // The old fixture-only "waitlisted" (pending review, no matching cohort)
 // state isn't seeded or tested here anymore: hasMatchingCohort is
-// hardcoded false in lib/data.ts (confirmed with Ferenz - no real
+// hardcoded true in lib/data.ts (confirmed with Ferenz - no real
 // matching signal exists without inventing one near CLAUDE.md's
 // no-auto-matcher invariant), so every pending_review applicant renders
 // "waiting for review" now and that branch is unreachable with real data.
+//
+// The three /status/[applicantId] states below moved out of this
+// render-only loop into their own dedicated tests further down, each
+// asserting the actual rendered copy - a real shipped bug (a boolean
+// inversion in getApplicant's hasMatchingCohort, caught by Stream B
+// while rebasing against this same PR) rendered without any client-side
+// error on the WRONG branch, so "renders without a client-side error"
+// alone was never going to catch it.
 const PAGES = [
   { path: "/sign-in", name: "sign-in" },
-  { path: "/status/88888888-0000-0000-0000-000000000001", name: "applicant status — waiting for review" },
-  { path: "/status/88888888-0000-0000-0000-000000000502", name: "applicant status — assigned" },
-  { path: "/status/88888888-0000-0000-0000-000000000503", name: "applicant status — program complete" },
   { path: "/refer/riverside-health", name: "referral landing — valid partner slug" },
   { path: "/refer/not-a-real-slug", name: "referral landing — invalid partner slug" },
 ];
@@ -48,6 +53,24 @@ for (const { path, name } of PAGES) {
     expect(pageErrors).toEqual([]);
   });
 }
+
+// L4/L5: real content assertions, not just "no client-side error" - see
+// the comment above PAGES for why a render-only check isn't enough here.
+test("applicant status — pending review renders the generic 'still finding' state", async ({ page }) => {
+  await page.goto("/status/88888888-0000-0000-0000-000000000001");
+  await expect(page.getByText("We're finding your group")).toBeVisible();
+  await expect(page.getByText("You're on the list")).toHaveCount(0);
+});
+
+test("applicant status — enrolled renders the assigned-session state with a real date", async ({ page }) => {
+  await page.goto("/status/88888888-0000-0000-0000-000000000502");
+  await expect(page.getByText("Your first session")).toBeVisible();
+});
+
+test("applicant status — completed renders the program-complete state", async ({ page }) => {
+  await page.goto("/status/88888888-0000-0000-0000-000000000503");
+  await expect(page.getByText("You've completed the program")).toBeVisible();
+});
 
 // L1: every (caregiver) route now requires a signed-in session -
 // unauthenticated access redirects to /sign-in rather than rendering
