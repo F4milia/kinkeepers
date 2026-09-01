@@ -131,6 +131,7 @@ const CAREGIVER_ROUTES = [
   "/consent",
   "/facilitator",
   "/facilitator/schedule",
+  "/facilitator/certifications",
 ];
 
 for (const path of CAREGIVER_ROUTES) {
