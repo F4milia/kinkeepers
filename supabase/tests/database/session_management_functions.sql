@@ -16,6 +16,15 @@ update profiles set role = 'admin' where id = '66666666-0000-0000-0000-00000000e
 update profiles set role = 'facilitator' where id = '66666666-0000-0000-0000-00000000e002';
 update profiles set role = 'facilitator' where id = '66666666-0000-0000-0000-00000000e003';
 
+-- A4-cert: cohorts.program_id + facilitator_id now require a current
+-- certification (enforce_cohort_program_and_facilitator()) - without
+-- this row, the cohort insert below would throw before this file's own
+-- assertions ever ran. Only the primary facilitator (e002) needs one -
+-- the substitute (e003) is only ever set on sessions.substitute_facilitator_id,
+-- which this trigger (on cohorts, not sessions) doesn't check.
+insert into facilitator_certifications (facilitator_id, program_id, certified_on, expires_on, certifying_body) values
+  ('66666666-0000-0000-0000-00000000e002', '99999999-0000-0000-0000-00000000e001', current_date - 30, current_date + 300, 'pgTAP Certifying Body');
+
 insert into cohorts (id, name, grouping_description, capacity, cadence, meeting_day_of_week, meeting_time, time_zone, program_id, facilitator_id)
 values ('77777777-0000-0000-0000-00000000e001', 'Session Mgmt Cohort', 'x', 8, 'weekly', 2, '18:30', 'America/New_York', '99999999-0000-0000-0000-00000000e001', '66666666-0000-0000-0000-00000000e002');
 

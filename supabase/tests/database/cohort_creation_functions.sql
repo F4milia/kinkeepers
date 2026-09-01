@@ -17,6 +17,13 @@ insert into auth.users (id, email) values
 update profiles set role = 'admin' where id = '66666666-0000-0000-0000-00000000f001';
 update profiles set role = 'facilitator' where id = '66666666-0000-0000-0000-00000000f002';
 
+-- A4-cert: cohorts.program_id + facilitator_id now require a current
+-- certification (enforce_cohort_program_and_facilitator()) - without
+-- this row, both inserts below would throw before this file's own
+-- assertions ever ran.
+insert into facilitator_certifications (facilitator_id, program_id, certified_on, expires_on, certifying_body) values
+  ('66666666-0000-0000-0000-00000000f002', '99999999-0000-0000-0000-00000000f001', current_date - 30, current_date + 300, 'pgTAP Certifying Body');
+
 insert into cohorts (id, name, grouping_description, capacity, cadence, meeting_day_of_week, meeting_time, time_zone, program_id, facilitator_id)
 values
   ('77777777-0000-0000-0000-00000000f001', 'Finalize Success Cohort', 'x', 8, 'weekly', 2, '18:30', 'America/New_York', '99999999-0000-0000-0000-00000000f001', '66666666-0000-0000-0000-00000000f002'),

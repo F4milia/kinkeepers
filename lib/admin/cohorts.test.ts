@@ -73,6 +73,27 @@ describe("cohorts admin data layer", () => {
     if (notLicensedError || !notLicensedProgram) throw notLicensedError ?? new Error("failed to create program");
     notLicensedProgramId = notLicensedProgram.id;
 
+    // A4-cert: cohorts.program_id + facilitator_id now require a current
+    // certification - without these, both cohort inserts below would
+    // fail at the trigger before this file's own assertions ever ran.
+    const { error: certError } = await admin.from("facilitator_certifications").insert([
+      {
+        facilitator_id: facilitatorAUser.id,
+        program_id: licensedProgramId,
+        certified_on: new Date(Date.now() - 30 * 86_400_000).toISOString().slice(0, 10),
+        expires_on: new Date(Date.now() + 300 * 86_400_000).toISOString().slice(0, 10),
+        certifying_body: "Vitest Certifying Body",
+      },
+      {
+        facilitator_id: facilitatorBUser.id,
+        program_id: licensedProgramId,
+        certified_on: new Date(Date.now() - 30 * 86_400_000).toISOString().slice(0, 10),
+        expires_on: new Date(Date.now() + 300 * 86_400_000).toISOString().slice(0, 10),
+        certifying_body: "Vitest Certifying Body",
+      },
+    ]);
+    if (certError) throw certError;
+
     const cohortFields = {
       grouping_description: "Test group",
       capacity: 8,
