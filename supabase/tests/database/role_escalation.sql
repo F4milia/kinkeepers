@@ -12,8 +12,18 @@
 -- Per the run doc's methodology: every isolation boundary is tested as a
 -- real authenticated user, never the service role.
 --
--- Cohort isolation (the third X5a boundary) is deferred, not silently
--- skipped: no cohorts/posts schema exists yet (A3, Wave 4, not built).
+-- Cohort isolation (the third X5a boundary, originally deferred here
+-- because no cohorts/posts schema existed yet) is closed as of X5b - not
+-- in this file, but as an incidental consequence of two other sessions'
+-- own work: cohort_creation_schema.sql (A3) proves one facilitator cannot
+-- read another facilitator's cohort, and member_identity_bridge.sql (L5)
+-- proves a member cannot read a cohort they aren't enrolled in - its
+-- rows, sessions, or roster - complete with a real negative-test drill.
+-- Both were built for reasons unrelated to X5b and happened to close the
+-- gap this comment used to flag; X5b's own job ended up being this
+-- correction, not new isolation logic. No `posts`/discussion schema
+-- exists yet, so that half of the original note is still accurate and
+-- still open for whichever session builds it.
 -- Organization isolation (the first X5a boundary) is not repeated here -
 -- already thoroughly covered by P2's referral_intake_schema.sql.
 
