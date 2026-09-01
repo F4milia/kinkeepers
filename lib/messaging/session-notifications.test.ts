@@ -60,7 +60,7 @@ describe("session notifications", () => {
     if (cohortError || !cohort) throw cohortError ?? new Error("failed to create cohort");
     cohortId = cohort.id;
 
-    async function insertApplicant(status: string, email: string) {
+    async function insertApplicant(status: string, email: string, timeZone: string | null = null) {
       const { data, error } = await admin
         .from("applicants")
         .insert({
@@ -70,6 +70,7 @@ describe("session notifications", () => {
           cohort_id: status === "enrolled" || status === "attending" ? cohortId : null,
           email,
           preferred_contact_channel: "email",
+          time_zone: timeZone,
         })
         .select("id")
         .single();
@@ -78,8 +79,8 @@ describe("session notifications", () => {
       return data.id;
     }
 
-    await insertApplicant("enrolled", "enrolled-member@example.com");
-    await insertApplicant("attending", "attending-member@example.com");
+    await insertApplicant("enrolled", "enrolled-member@example.com", "Pacific/Honolulu");
+    await insertApplicant("attending", "attending-member@example.com", null);
     await insertApplicant("declined", "declined-member@example.com");
     await insertApplicant("pending_review", "pending-member@example.com");
   });
@@ -110,6 +111,23 @@ describe("session notifications", () => {
     expect(call[0].subject.toLowerCase()).not.toMatch(/dementia|caregiv|support group/);
     expect(call[0].emailHtml.toLowerCase()).not.toMatch(/dementia|caregiv|support group/);
     expect(call[0].smsBody.toLowerCase()).not.toMatch(/dementia|caregiv|support group/);
+  });
+
+  it("named edge case: a member in Honolulu, cohort in Eastern, gets both zones - not just the cohort's", async () => {
+    // Mid-March, before the US DST change - matches the winter case
+    // already named in cohort-meeting-time.test.ts's own edge case.
+    await notifySessionRescheduled(admin, cohortId, new Date("2027-03-09T18:30:00Z"), "America/New_York", null);
+
+    const calls = vi.mocked(notifyMember).mock.calls;
+    const honoluluCall = calls.find((call) => call[0].contact.email === "enrolled-member@example.com")!;
+    expect(honoluluCall[0].emailHtml).toContain("HST");
+    expect(honoluluCall[0].emailHtml).toContain("EST");
+    expect(honoluluCall[0].emailHtml).toMatch(/your time.*for the group/);
+
+    const noZoneCall = calls.find((call) => call[0].contact.email === "attending-member@example.com")!;
+    expect(noZoneCall[0].emailHtml).toContain("EST");
+    expect(noZoneCall[0].emailHtml).not.toContain("HST");
+    expect(noZoneCall[0].emailHtml).not.toMatch(/your time/);
   });
 
   it("notifySessionCancelled only notifies enrolled/attending members and never mentions dementia/caregiving", async () => {
