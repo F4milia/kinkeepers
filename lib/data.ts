@@ -35,6 +35,7 @@ import { sessionDateTimeFields, zoneFriendlyLabel } from "@/lib/session-time";
 import { computeCertificationExpiryStatus } from "@/lib/certification-status";
 import type {
   Applicant,
+  AttendanceStatus,
   Cohort,
   CohortMember,
   CohortStatus,
@@ -42,6 +43,7 @@ import type {
   FacilitatorCertification,
   Post,
   Session,
+  SessionAttendance,
   SessionStatus,
 } from "@/lib/types";
 
@@ -222,11 +224,30 @@ export async function getFacilitator(_cohortId: string): Promise<Facilitator | u
   return undefined;
 }
 
+/**
+ * The roster for a facilitator viewing their OWN cohort (the session-log
+ * screen) - not the same as getCohortMembers, which resolves "my cohort"
+ * via the caller's own applicant row and so always returns empty for a
+ * facilitator (they have none). A facilitator may run more than one
+ * cohort, so this takes the cohort explicitly - list_cohort_roster_for_
+ * facilitator() (X4) verifies the caller actually runs it before
+ * returning anything.
+ */
+export async function getCohortMembersForFacilitator(cohortId: string, callerClient?: SupabaseClient): Promise<CohortMember[]> {
+  const supabase = await resolveClient(callerClient);
+  const { data, error } = await supabase.rpc("list_cohort_roster_for_facilitator", { target_cohort_id: cohortId });
+  if (error) throw new DataUnavailableError(error.message);
+
+  const rows = (data ?? []) as unknown as Array<{ applicant_id: string; first_name: string | null; last_name: string | null }>;
+  return rows.map((row) => ({ id: row.applicant_id, cohortId, firstName: row.first_name ?? "", caringFor: "", role: "member" }));
+}
+
 // ---------------------------------------------------------------------
 // Sessions
 // ---------------------------------------------------------------------
 
-const SESSION_SELECT = "id, cohort_id, session_number, scheduled_at, status, video_join_url";
+const SESSION_SELECT =
+  "id, cohort_id, session_number, scheduled_at, status, video_join_url, video_dial_in_number, video_dial_in_pin";
 
 interface SessionRow {
   id: string;
@@ -235,26 +256,65 @@ interface SessionRow {
   scheduled_at: string;
   status: "scheduled" | "completed" | "cancelled";
   video_join_url: string | null;
+  video_dial_in_number: string | null;
+  video_dial_in_pin: string | null;
 }
 
 function mapSessionStatus(status: SessionRow["status"]): SessionStatus {
   return status === "scheduled" ? "upcoming" : "past";
 }
 
+/**
+ * X4's prerequisite backend, read side. Only queried for a past session -
+ * an upcoming one has nothing to have logged yet. loggedBy/loggedDate
+ * stay unset even when a real log exists: no facilitator display name
+ * exists anywhere in the schema (this file's own header comment), and
+ * unlike attendance/notes/deliveryConfirmed, showing the wrong thing here
+ * is purely cosmetic (the "logged by X" banner just doesn't render) -
+ * submit_session_log() itself still correctly detects a correction
+ * server-side regardless of what the client's initial render assumed.
+ */
+async function fetchSessionLogDetails(
+  supabase: SupabaseClient,
+  sessionId: string,
+): Promise<Pick<Session, "attendance" | "attendanceByMember" | "notes" | "deliveryConfirmed">> {
+  const [{ data: log }, { data: attendanceRows }] = await Promise.all([
+    supabase.from("session_logs").select("delivery_confirmed, notes").eq("session_id", sessionId).maybeSingle(),
+    supabase.from("session_attendance").select("applicant_id, status").eq("session_id", sessionId),
+  ]);
+
+  const attendanceByMember: Record<string, AttendanceStatus> = {};
+  const attendance: SessionAttendance = { present: 0, absent: 0, excused: 0 };
+  for (const row of attendanceRows ?? []) {
+    attendanceByMember[row.applicant_id] = row.status as AttendanceStatus;
+    attendance[row.status as "present" | "absent" | "excused"] += 1;
+  }
+
+  return {
+    attendance: (attendanceRows ?? []).length > 0 ? attendance : undefined,
+    attendanceByMember,
+    notes: log?.notes ?? undefined,
+    deliveryConfirmed: log?.delivery_confirmed ?? undefined,
+  };
+}
+
 async function toSession(
+  supabase: SupabaseClient,
   row: SessionRow,
   cohort: { time_zone: string; delivery_format: "video" | "in_person" | null; programs: { session_count: number } | null },
   memberTimeZone: string | null,
 ): Promise<Session> {
   const instant = new Date(row.scheduled_at);
   const { date, time, timeZoneLabel } = sessionDateTimeFields(instant, memberTimeZone ?? cohort.time_zone);
+  const status = mapSessionStatus(row.status);
+  const logDetails = status === "past" ? await fetchSessionLogDetails(supabase, row.id) : {};
 
   return {
     id: row.id,
     cohortId: row.cohort_id,
     sessionNumber: row.session_number,
     sessionTotal: cohort.programs?.session_count ?? 0,
-    status: mapSessionStatus(row.status),
+    status,
     date,
     time,
     timeZoneLabel,
@@ -270,8 +330,12 @@ async function toSession(
     // source.
     topic: null,
     joinUrl: row.status === "scheduled" ? row.video_join_url : null,
+    // X4: visible everywhere the join link is, same null condition.
+    dialInNumber: row.status === "scheduled" ? row.video_dial_in_number : null,
+    dialInPin: row.status === "scheduled" ? row.video_dial_in_pin : null,
     // No materials table exists yet.
     materialsCount: 0,
+    ...logDetails,
   };
 }
 
@@ -315,7 +379,7 @@ export async function getSessions(cohortId: string, callerClient?: SupabaseClien
   ]);
   if (error) throw new DataUnavailableError(error.message);
 
-  return Promise.all((rows ?? []).map((row) => toSession(row as SessionRow, cohort, memberTimeZone)));
+  return Promise.all((rows ?? []).map((row) => toSession(supabase, row as SessionRow, cohort, memberTimeZone)));
 }
 
 export async function getUpcomingSession(cohortId: string, callerClient?: SupabaseClient): Promise<Session | undefined> {
@@ -335,7 +399,7 @@ export async function getSession(sessionId: string, callerClient?: SupabaseClien
     getCohortTimeZoneAndFormat(supabase, typedRow.cohort_id),
     currentMemberTimeZoneOrNull(supabase),
   ]);
-  return toSession(typedRow, cohort, memberTimeZone);
+  return toSession(supabase, typedRow, cohort, memberTimeZone);
 }
 
 // ---------------------------------------------------------------------
@@ -379,7 +443,7 @@ export async function getFacilitatorSessions(callerClient?: SupabaseClient): Pro
       // A facilitator's own schedule always renders in each cohort's own
       // zone, not a personal one - there's no "facilitator's home time
       // zone" concept anywhere in the schema, unlike a member's.
-      return toSession(row as SessionRow, cohort, null);
+      return toSession(supabase, row as SessionRow, cohort, null);
     }),
   );
 }

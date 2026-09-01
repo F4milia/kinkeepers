@@ -81,6 +81,13 @@ export const COPY = {
     edited_by: "Edited by {name} on {date}",
     previous_value: "Previously: {value}",
     unmarked_warning: "{n} people are not marked.",
+    // X4: "Unidentified caller — (last 4 digits)" is quoted directly from
+    // the X4 prompt, the parenthetical being where the real digits go.
+    // attribute_label/attribute_unassigned are plain functional labels,
+    // same low-risk precedent as other verb/option labels in this deck.
+    unidentified_caller: "Unidentified caller — {last4}",
+    attribute_label: "Attribute to",
+    attribute_unassigned: "Not yet identified",
   },
   error: {
     required: "This can't be empty.",
