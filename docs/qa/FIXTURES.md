@@ -8,9 +8,10 @@ exists in `supabase/seed.sql` today. `seed.sql` grows incrementally
 so this table grows the same way - add a row here in the same PR that
 adds the fixture to `seed.sql`, don't seed ahead of need.
 
-Every fixture below is reset from scratch on `supabase db reset --local`
-and, once staging resets nightly against this same file, will be
-identically present on every preview deploy.
+Every fixture below is reset from scratch on `supabase db reset --local`.
+It is NOT currently guaranteed present on a preview deploy - see "Real
+blocker" below before assuming a QA doc's fixtures match what a preview
+URL actually shows.
 
 | Fixture | What it's for | Real id / lookup |
 |---|---|---|
@@ -38,9 +39,31 @@ fixtures that reset are here in `seed.sql`, so every environment
 into `seed.sql` the next time a QA doc needs to reference it by name.
 
 **Also note:** there's no nightly reset cron running against the hosted
-project yet - X1 built the one-command reset itself, but not a schedule
-that runs it. Until one exists, staging/preview data can drift from a
-clean `seed.sql` state over time. Flagged for whoever picks up the
-"preview deploys must exist per PR" prerequisite fully - the deploys
-already exist (confirmed via the Vercel API and PR comments), the nightly
-reset is the missing piece.
+project, and per Ferenz's direction (2026-09-02), **none should be built
+until this next gap is closed:**
+
+## Real blocker: no separate staging project exists
+
+Checked directly against Vercel's own environment variable config:
+`NEXT_PUBLIC_SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` are set to the
+*same* values for both the `production` and `preview` targets. Every
+preview deployment (every open PR) and the live production site all
+point at the one Supabase project - the "hosted" project referenced
+throughout this session's manual testing.
+
+X1's original Wave 0 spec called for a genuinely separate staging
+project ("Separate Supabase project, separate database... Staging must
+NEVER send real messages"). In practice, everything converged onto one
+shared project instead - X1's own separate-credentials/no-real-messages
+guarantees may not actually hold today either, not just the reset-cron
+piece.
+
+This makes an automatic nightly `supabase db reset --linked` (as
+`qa-previous-session-sop.md` literally describes it) genuinely dangerous
+as written: it would wipe the live production site's data on the same
+schedule as "staging," not just isolated test data. Confirmed with
+Ferenz before building anything here - holding off on any nightly reset
+cron until a real, separate staging Supabase project exists with its own
+credentials, with Vercel's `preview` environment pointed at it instead of
+production's project. That's real infrastructure work, not a follow-up
+tweak to this doc.
