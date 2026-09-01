@@ -2,7 +2,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { THEME_COOKIE, isTheme, type Theme } from "@/lib/theme";
 import { AppShell } from "@/components/app-shell";
-import { getCurrentRole } from "@/lib/auth/roles";
+import { getCurrentRole, getSignedOutReason } from "@/lib/auth/roles";
 
 // The caregiver shell (bottom tab bar, 620px max-width, single column) -
 // split out from the root layout so /admin (A1) can carry a different
@@ -13,12 +13,16 @@ import { getCurrentRole } from "@/lib/auth/roles";
 // L1: every route in this group now requires a real signed-in session -
 // getCurrentRole() resolves role/session server-side from the database
 // (never a client claim, per CLAUDE.md invariant #9); null means signed
-// out. The fixture data these screens render is still the same generic
-// content for everyone regardless of who signs in (L5, Wave 8, wires real
-// per-member data) - this gate only decides whether you get in the door.
+// out. L5 wires real per-member data through these screens and adds the
+// no_session/session_expired distinction below, so a member whose
+// session lapsed mid-use lands on a sign-in screen that says so, rather
+// than the plain first-visit form - never a blank screen or a raw 401.
 export default async function CaregiverLayout({ children }: { children: React.ReactNode }) {
   const role = await getCurrentRole();
-  if (!role) redirect("/sign-in");
+  if (!role) {
+    const reason = await getSignedOutReason();
+    redirect(reason === "session_expired" ? "/sign-in?error=session_expired" : "/sign-in");
+  }
 
   const cookieStore = await cookies();
   const cookieTheme = cookieStore.get(THEME_COOKIE)?.value;

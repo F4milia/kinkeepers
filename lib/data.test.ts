@@ -1,0 +1,179 @@
+import { describe, expect, it, beforeAll, afterAll } from "vitest";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { clientForUser } from "@/test/helpers/local-auth";
+import {
+  getViewer,
+  getCohort,
+  getCohortMembers,
+  getSessions,
+  getUpcomingSession,
+  getSession,
+  getPosts,
+  getFacilitator,
+} from "@/lib/data";
+
+const admin = createAdminClient();
+
+describe("lib/data.ts against real endpoints (L5)", () => {
+  const partnerOrgId = "11111111-0000-0000-0000-0000000d0501";
+  const programId = "77777777-0000-0000-0000-0000000d0501";
+  const cohortId = "99999999-0000-0000-0000-0000000d0501";
+  const pastSessionId = "55555555-0000-0000-0000-0000000d0501";
+  const upcomingSessionId = "55555555-0000-0000-0000-0000000d0502";
+  const applicantId = "88888888-0000-0000-0000-0000000d0501";
+  let memberUserId: string;
+  let unmatchedUserId: string;
+
+  beforeAll(async () => {
+    await admin.from("partner_organizations").insert({
+      id: partnerOrgId,
+      name: "L5 Data Test Org",
+      referral_link_slug: "l5-data-test-org",
+    });
+
+    await admin.from("programs").insert({
+      id: programId,
+      name: "L5 Data Test Program",
+      developer: "Test Developer",
+      session_count: 2,
+      session_duration_minutes: 90,
+      delivery_formats: ["video"],
+      languages: ["English"],
+      facilitator_qualification: "Lay leader",
+      license_status: "licensed",
+    });
+
+    await admin.from("cohorts").insert({
+      id: cohortId,
+      name: "L5 Data Test Cohort",
+      grouping_description: "Test grouping",
+      capacity: 8,
+      cadence: "weekly",
+      meeting_day_of_week: 2,
+      meeting_time: "18:30",
+      time_zone: "America/New_York",
+      program_id: programId,
+      delivery_format: "video",
+      status: "active",
+    });
+
+    await admin.from("sessions").insert([
+      {
+        id: pastSessionId,
+        cohort_id: cohortId,
+        session_number: 1,
+        scheduled_at: new Date(Date.now() - 7 * 86_400_000).toISOString(),
+        status: "completed",
+      },
+      {
+        id: upcomingSessionId,
+        cohort_id: cohortId,
+        session_number: 2,
+        scheduled_at: new Date(Date.now() + 7 * 86_400_000).toISOString(),
+        status: "scheduled",
+        video_join_url: "https://example.com/l5-data-test-join",
+      },
+    ]);
+
+    const { data: memberUser, error: memberError } = await admin.auth.admin.createUser({
+      email: `l5-data-test-member-${Date.now()}@example.com`,
+      email_confirm: true,
+    });
+    if (memberError || !memberUser.user) throw memberError ?? new Error("createUser failed");
+    memberUserId = memberUser.user.id;
+
+    await admin.from("applicants").insert({
+      id: applicantId,
+      partner_organization_id: partnerOrgId,
+      referral_source: "partner_link",
+      first_name: "Devon",
+      last_name: "Ashford",
+      email: memberUser.user.email,
+      status: "enrolled",
+      cohort_id: cohortId,
+    });
+
+    const { data: unmatchedUser, error: unmatchedError } = await admin.auth.admin.createUser({
+      email: `l5-data-test-unmatched-${Date.now()}@example.com`,
+      email_confirm: true,
+    });
+    if (unmatchedError || !unmatchedUser.user) throw unmatchedError ?? new Error("createUser failed");
+    unmatchedUserId = unmatchedUser.user.id;
+  });
+
+  afterAll(async () => {
+    await admin.from("sessions").delete().in("id", [pastSessionId, upcomingSessionId]);
+    await admin.from("applicants").delete().eq("id", applicantId);
+    await admin.from("cohorts").delete().eq("id", cohortId);
+    await admin.from("programs").delete().eq("id", programId);
+    await admin.from("partner_organizations").delete().eq("id", partnerOrgId);
+    await admin.auth.admin.deleteUser(memberUserId);
+    await admin.auth.admin.deleteUser(unmatchedUserId);
+  });
+
+  it("getViewer claims and resolves the signed-in member's own enrollment", async () => {
+    const client = await clientForUser(memberUserId);
+    const viewer = await getViewer(client);
+    expect(viewer.cohortId).toBe(cohortId);
+    expect(viewer.firstName).toBe("Devon");
+    expect(viewer.role).toBe("member");
+  });
+
+  it("getViewer throws (not-found) for a signed-in account with no matching enrollment", async () => {
+    const client = await clientForUser(unmatchedUserId);
+    await expect(getViewer(client)).rejects.toThrow();
+  });
+
+  it("getCohort returns real cohort fields, including the joined program name and computed session position", async () => {
+    const client = await clientForUser(memberUserId);
+    const cohort = await getCohort(cohortId, client);
+    expect(cohort?.name).toBe("L5 Data Test Cohort");
+    expect(cohort?.program).toBe("L5 Data Test Program");
+    expect(cohort?.timeZoneLabel).toBe("Eastern");
+    expect(cohort?.sessionTotal).toBe(2);
+    // One session already in the past -> position 2 of 2.
+    expect(cohort?.sessionNumber).toBe(2);
+  });
+
+  it("getCohortMembers includes the member's own real name via list_cohort_roster", async () => {
+    const client = await clientForUser(memberUserId);
+    await getViewer(client); // claims first, same as a real page render would
+    const members = await getCohortMembers(cohortId, client);
+    const self = members.find((m) => m.id === applicantId);
+    expect(self?.firstName).toBe("Devon");
+    expect(self?.role).toBe("member");
+  });
+
+  it("getSessions maps status to upcoming/past and getUpcomingSession picks the scheduled one", async () => {
+    const client = await clientForUser(memberUserId);
+    const sessions = await getSessions(cohortId, client);
+    expect(sessions).toHaveLength(2);
+    const past = sessions.find((s) => s.id === pastSessionId);
+    const upcoming = sessions.find((s) => s.id === upcomingSessionId);
+    expect(past?.status).toBe("past");
+    expect(upcoming?.status).toBe("upcoming");
+    expect(upcoming?.joinUrl).toBe("https://example.com/l5-data-test-join");
+    // A completed session's join link is hidden - see toSession's own comment.
+    expect(past?.joinUrl).toBeNull();
+
+    const next = await getUpcomingSession(cohortId, client);
+    expect(next?.id).toBe(upcomingSessionId);
+  });
+
+  it("getSession returns a single session by id, scoped by the same RLS as getSessions", async () => {
+    const client = await clientForUser(memberUserId);
+    const session = await getSession(upcomingSessionId, client);
+    expect(session?.cohortId).toBe(cohortId);
+  });
+
+  it("getSession returns undefined for an id RLS hides from this caller", async () => {
+    const client = await clientForUser(unmatchedUserId);
+    const session = await getSession(upcomingSessionId, client);
+    expect(session).toBeUndefined();
+  });
+
+  it("getPosts and getFacilitator are honest not-yet-available states, never fabricated data", async () => {
+    await expect(getPosts(cohortId)).resolves.toEqual([]);
+    await expect(getFacilitator(cohortId)).resolves.toBeUndefined();
+  });
+});

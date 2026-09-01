@@ -1,6 +1,6 @@
 import { Badge } from "@/components/ui/badge";
 import { COPY } from "@/lib/copy";
-import type { DeliveryFormat } from "@/lib/fixtures";
+import type { DeliveryFormat } from "@/lib/types";
 
 function IconVideo() {
   return (

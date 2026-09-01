@@ -8,7 +8,7 @@ import { Card } from "@/components/ui/card";
 import { Composer } from "@/components/discussion/composer";
 import { COPY, format } from "@/lib/copy";
 import { formatRelativeDays } from "@/lib/format-date";
-import type { MemberRole, Post } from "@/lib/fixtures";
+import type { MemberRole, Post } from "@/lib/types";
 
 export interface PostItemProps {
   post: Post;

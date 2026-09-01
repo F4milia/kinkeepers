@@ -5,7 +5,7 @@ import { FacilitatorSessionLog } from "@/components/facilitator/session-log";
 import { SessionDetail } from "@/components/session/session-detail";
 import { getCohortMembers, getFacilitator, getSession, getViewer } from "@/lib/data";
 import { DEV_VIEW_COOKIE, isDevView, type DevView } from "@/lib/dev-view";
-import type { Session } from "@/lib/fixtures";
+import type { Session } from "@/lib/types";
 
 // /session/[sessionId] | Part 3.4. One route, two roles: the dev view
 // switcher decides which of these renders — the caregiver detail screen, or
@@ -13,7 +13,7 @@ import type { Session } from "@/lib/fixtures";
 // rather than in AppShell because this is the only route it affects.
 export default async function SessionPage({ params }: { params: Promise<{ sessionId: string }> }) {
   const { sessionId } = await params;
-  const session = getSession(sessionId);
+  const session = await getSession(sessionId);
   if (!session) notFound();
 
   const cookieStore = await cookies();
@@ -32,10 +32,10 @@ export default async function SessionPage({ params }: { params: Promise<{ sessio
   );
 }
 
-function FacilitatorView({ session }: { session: Session }) {
-  const viewer = getViewer();
-  const facilitator = getFacilitator(viewer.cohortId);
+async function FacilitatorView({ session }: { session: Session }) {
+  const viewer = await getViewer();
+  const facilitator = await getFacilitator(viewer.cohortId);
   if (!facilitator) notFound();
-  const members = getCohortMembers(viewer.cohortId);
+  const members = await getCohortMembers(viewer.cohortId);
   return <FacilitatorSessionLog session={session} members={members} facilitatorName={facilitator.firstName} />;
 }

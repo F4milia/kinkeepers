@@ -1,6 +1,6 @@
 import { Button, buttonClasses } from "@/components/ui/button";
 import { COPY } from "@/lib/copy";
-import type { Session } from "@/lib/fixtures";
+import type { Session } from "@/lib/types";
 
 /**
  * The one primary action on a session — "Join by video" or "Get directions".

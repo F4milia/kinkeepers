@@ -124,6 +124,51 @@ insert into applicants (id, partner_organization_id, referral_source, first_name
 
 update applicants set decline_reason = 'unresponsive' where id = '88888888-0000-0000-0000-000000000004';
 
+-- L5: a session #1 already scheduled, so /status/[applicantId]'s
+-- "assigned, before session one" state has something real to render
+-- against. No program_id: enforce_cohort_program_and_facilitator()
+-- (X2) rejects any non-null program_id whose license_status isn't
+-- 'licensed', and this seed deliberately licenses none yet ("makes zero
+-- programs selectable... accurate state, not a bug") - a null program_id
+-- here is the same honesty, not a shortcut. Own cohort, not one of the
+-- two above, so this never perturbs A2/A3's existing composition-based
+-- tests.
+insert into cohorts (id, name, grouping_description, capacity, cadence, meeting_day_of_week, meeting_time, time_zone, delivery_format, status) values
+  (
+    '99999999-0000-0000-0000-000000000501', 'L5 Demo Cohort',
+    'Demo cohort for the applicant status page''s assigned state',
+    10, 'weekly', 2, '18:30', 'America/New_York',
+    'video', 'active'
+  );
+
+insert into sessions (id, cohort_id, session_number, scheduled_at, video_join_url, video_dial_in_number, video_dial_in_pin) values
+  (
+    '55555555-0000-0000-0000-000000000501', '99999999-0000-0000-0000-000000000501', 1,
+    now() + interval '7 days', 'https://example.com/l5-demo-join', '1-800-555-0199', '123456'
+  );
+
+-- L5: the applicant-facing status page's other two real states -
+-- "enrolled, before session one" and "completed" - seeded with fixed ids
+-- so e2e/smoke.spec.ts can visit them directly. The "waitlisted" (pending
+-- review, no matching cohort) state from the old fixture-driven UI is not
+-- seeded here: hasMatchingCohort is hardcoded false in lib/data.ts
+-- (confirmed with Ferenz - no real matching signal exists), so every
+-- pending_review applicant now renders "waiting for review" and that
+-- second branch is unreachable with real data.
+insert into applicants (id, partner_organization_id, referral_source, first_name, last_name, email, phone, time_zone, relationship, care_recipient_stage, preferred_contact_channel, status, cohort_id) values
+  (
+    '88888888-0000-0000-0000-000000000502',
+    (select id from partner_organizations where name = 'Riverside Health Network'),
+    'partner_link', 'Sam', 'Ellison', 'sam.ellison@example.com', '+15125550199',
+    'America/New_York', 'Spouse', 'early', 'email', 'enrolled', '99999999-0000-0000-0000-000000000501'
+  ),
+  (
+    '88888888-0000-0000-0000-000000000503',
+    (select id from partner_organizations where name = 'Riverside Health Network'),
+    'partner_link', 'Terry', 'Whitfield', 'terry.whitfield@example.com', '+15125550198',
+    'America/New_York', 'Adult child', 'late', 'email', 'completed', '99999999-0000-0000-0000-000000000501'
+  );
+
 -- Backdated so the admin queue's oldest-first sort and "N days waiting"
 -- copy have real variation to show - the stamping trigger sets these to
 -- now() on insert above, which would otherwise make every seeded row

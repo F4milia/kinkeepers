@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { JoinAction } from "@/components/session/join-action";
 import { DeliveryBadge } from "@/components/session/delivery-badge";
+import { NextSessionCacheWriter } from "@/components/session/next-session-cache-writer";
 import { Card } from "@/components/ui/card";
 import { Avatar } from "@/components/ui/avatar";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -12,10 +13,10 @@ import { formatRelativeDays, formatSessionDay } from "@/lib/format-date";
 // program position, up to two recent posts, quiet link to discussion. One
 // primary action on this screen: the meeting action. The theme toggle moved
 // to the app header so it's available on every screen, not just here.
-export default function HomePage() {
-  const viewer = getViewer();
-  const upcomingSession = getUpcomingSession(viewer.cohortId);
-  const recentPosts = getPosts(viewer.cohortId).slice(0, 2);
+export default async function HomePage() {
+  const viewer = await getViewer();
+  const upcomingSession = await getUpcomingSession(viewer.cohortId);
+  const recentPosts = (await getPosts(viewer.cohortId)).slice(0, 2);
 
   return (
     <div className="flex flex-col gap-section">
@@ -23,6 +24,17 @@ export default function HomePage() {
 
       {upcomingSession ? (
         <Card className="flex flex-col items-start gap-4">
+          <NextSessionCacheWriter
+            session={{
+              date: upcomingSession.date,
+              time: upcomingSession.time,
+              timeZoneLabel: upcomingSession.timeZoneLabel,
+              joinUrl: upcomingSession.joinUrl,
+              deliveryFormat: upcomingSession.deliveryFormat,
+              sessionNumber: upcomingSession.sessionNumber,
+              sessionTotal: upcomingSession.sessionTotal,
+            }}
+          />
           <Link href={`/session/${upcomingSession.id}`} className="-m-1 block rounded-control p-1 transition-colors hover:text-action">
             <p className="text-h2 font-heading">{formatSessionDay(upcomingSession.date)}</p>
             <p className="mt-1 text-body-lg font-ui text-ink-soft">

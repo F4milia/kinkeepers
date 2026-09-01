@@ -20,7 +20,8 @@ export interface CohortMeetingSlot {
   timeZone: string;
 }
 
-function getWallClockParts(date: Date, timeZone: string) {
+/** Exported for lib/session-time.ts, which needs the same instant-to-wall-clock conversion for member-facing session rendering. */
+export function getWallClockParts(date: Date, timeZone: string) {
   const formatter = new Intl.DateTimeFormat("en-US", {
     timeZone,
     year: "numeric",

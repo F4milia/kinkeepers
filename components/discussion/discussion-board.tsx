@@ -5,7 +5,7 @@ import { Composer } from "@/components/discussion/composer";
 import { PostItem } from "@/components/discussion/post-item";
 import { EmptyState } from "@/components/ui/empty-state";
 import { COPY } from "@/lib/copy";
-import type { CohortMember, Post, PostReply } from "@/lib/fixtures";
+import type { CohortMember, Post, PostReply } from "@/lib/types";
 
 export interface DiscussionBoardProps {
   cohortId: string;

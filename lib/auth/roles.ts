@@ -54,6 +54,27 @@ export async function getCurrentRole(): Promise<AppRole | null> {
   return result?.role ?? null;
 }
 
+/**
+ * L5: distinguishes "never signed in" from "had a session that's now
+ * invalid" - both make getCurrentRole() return null, but the sign-in
+ * screen should only say "you've been signed out" for the second one
+ * (CLAUDE.md: no invented copy - falsely telling a first-time visitor
+ * they were signed out would be exactly that). Supabase's own auth-js
+ * names this distinction already: getUser() returns an
+ * AuthSessionMissingError specifically when there's no session at all;
+ * any other error name means a session existed and failed to resolve
+ * (expired/invalid refresh token). Not an invented heuristic - this is
+ * the real, documented shape of the error @supabase/auth-js throws.
+ */
+export async function getSignedOutReason(
+  client?: SupabaseClient,
+): Promise<"no_session" | "session_expired"> {
+  const supabase = client ?? (await createClient());
+  const { error } = await supabase.auth.getUser();
+  if (error && error.name !== "AuthSessionMissingError") return "session_expired";
+  return "no_session";
+}
+
 // Guard for Server Components/Actions/Route Handlers. Throws rather than
 // redirecting or rendering a fallback itself - a 403 page, a redirect to
 // /sign-in, and a 404-to-avoid-leaking-existence are all legitimate

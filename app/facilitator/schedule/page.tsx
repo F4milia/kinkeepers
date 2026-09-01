@@ -2,7 +2,8 @@ import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { COPY, format } from "@/lib/copy";
-import { getCohort, getFacilitatorSchedule, type FacilitatorScheduleSession } from "@/lib/data";
+import { getFacilitatorCohorts, getFacilitatorSchedule, type FacilitatorScheduleSession } from "@/lib/data";
+import type { Cohort } from "@/lib/types";
 import { daysSince, formatSessionDay } from "@/lib/format-date";
 
 function LogStatus({ session }: { session: FacilitatorScheduleSession }) {
@@ -22,11 +23,13 @@ function LogStatus({ session }: { session: FacilitatorScheduleSession }) {
 function ScheduleRow({
   session,
   sessionsById,
+  cohortsById,
 }: {
   session: FacilitatorScheduleSession;
   sessionsById: Map<string, FacilitatorScheduleSession>;
+  cohortsById: Map<string, Cohort>;
 }) {
-  const cohort = getCohort(session.cohortId);
+  const cohort = cohortsById.get(session.cohortId);
 
   return (
     <li>
@@ -38,7 +41,7 @@ function ScheduleRow({
         <div className="flex flex-wrap gap-2">
           {session.status === "past" && <LogStatus session={session} />}
           {session.overlapsSessionIds.map((otherId) => {
-            const otherCohort = getCohort(sessionsById.get(otherId)?.cohortId ?? "");
+            const otherCohort = cohortsById.get(sessionsById.get(otherId)?.cohortId ?? "");
             return (
               <Badge key={otherId} variant="gentle">
                 {format(COPY.facilitator.schedule.overlaps_with, { cohortName: otherCohort?.name ?? "" })}
@@ -54,9 +57,10 @@ function ScheduleRow({
 // F1 Schedule | every session across the facilitator's cohorts,
 // chronological, split into upcoming/past per the prompt. Overlaps flagged
 // on whichever sessions collide, in either section.
-export default function FacilitatorSchedulePage() {
-  const schedule = getFacilitatorSchedule();
+export default async function FacilitatorSchedulePage() {
+  const [schedule, cohorts] = await Promise.all([getFacilitatorSchedule(), getFacilitatorCohorts()]);
   const sessionsById = new Map(schedule.map((session) => [session.id, session]));
+  const cohortsById = new Map(cohorts.map((cohort) => [cohort.id, cohort]));
   const upcoming = schedule.filter((session) => session.status === "upcoming");
   const past = schedule.filter((session) => session.status === "past");
 
@@ -78,7 +82,7 @@ export default function FacilitatorSchedulePage() {
         </h2>
         <ul className="flex flex-col gap-3">
           {upcoming.map((session) => (
-            <ScheduleRow key={session.id} session={session} sessionsById={sessionsById} />
+            <ScheduleRow key={session.id} session={session} sessionsById={sessionsById} cohortsById={cohortsById} />
           ))}
         </ul>
       </section>
@@ -89,7 +93,7 @@ export default function FacilitatorSchedulePage() {
         </h2>
         <ul className="flex flex-col gap-3">
           {past.map((session) => (
-            <ScheduleRow key={session.id} session={session} sessionsById={sessionsById} />
+            <ScheduleRow key={session.id} session={session} sessionsById={sessionsById} cohortsById={cohortsById} />
           ))}
         </ul>
       </section>
