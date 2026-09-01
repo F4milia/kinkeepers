@@ -13,19 +13,19 @@ describe("sendEmail", () => {
     ).rejects.toThrow(/Blocked outbound message/);
   });
 
-  it("named edge case: no RESEND_API_KEY configured (true in this test env, matching every real environment as of this writing) logs and no-ops rather than throwing", async () => {
+  it("named edge case: no RESEND_API_KEY configured (vitest.config.mts's isolated test env never sets it) logs and no-ops rather than throwing, returning false", async () => {
     process.env.STAGING_MESSAGE_ALLOWLIST = "team@example.com";
-    // Resolves, does not throw - the credential-gap path inside sendEmail
-    // catches the Resend SDK's synchronous constructor throw.
+    // Resolves false, does not throw - the credential-gap path inside
+    // sendEmail catches the Resend SDK's synchronous constructor throw.
     await expect(
       sendEmail({ to: "team@example.com", subject: "x", html: "<p>x</p>", logContext: { applicant_id: "abc" } }),
-    ).resolves.toBeUndefined();
+    ).resolves.toBe(false);
   });
 
-  it("allows any recipient in production, regardless of the allowlist", async () => {
+  it("allows any recipient in production, regardless of the allowlist (still returns false here - no RESEND_API_KEY in the test env)", async () => {
     process.env.APP_ENV = "production";
     await expect(
       sendEmail({ to: "anyone@example.com", subject: "x", html: "<p>x</p>", logContext: {} }),
-    ).resolves.toBeUndefined();
+    ).resolves.toBe(false);
   });
 });

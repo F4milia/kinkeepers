@@ -29,8 +29,11 @@ export interface SendSmsParams {
  * .env.local; A2P 10DLC registration is a separate, still-pending
  * compliance step) - same credential-gap treatment as sendEmail: log and
  * no-op rather than crash the feature that called this.
+ *
+ * Returns whether the send actually succeeded - see sendEmail's own
+ * comment on why this matters now (notification_log needs the outcome).
  */
-export async function sendSms({ to, body, logContext }: SendSmsParams): Promise<void> {
+export async function sendSms({ to, body, logContext }: SendSmsParams): Promise<boolean> {
   assertOutboundMessageAllowed(to);
 
   try {
@@ -40,7 +43,9 @@ export async function sendSms({ to, body, logContext }: SendSmsParams): Promise<
     }
     await getTwilioClient().messages.create({ to, from: fromNumber, body });
     log("sms_sent", logContext);
+    return true;
   } catch {
     logError("sms_send_failed", logContext);
+    return false;
   }
 }

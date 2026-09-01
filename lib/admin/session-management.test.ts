@@ -212,8 +212,9 @@ describe("session management actions", () => {
     );
 
     expect(notifySessionRescheduled).toHaveBeenCalledTimes(1);
-    const [, calledCohortId, calledInstant] = vi.mocked(notifySessionRescheduled).mock.calls[0];
+    const [, calledCohortId, calledSessionId, calledInstant] = vi.mocked(notifySessionRescheduled).mock.calls[0];
     expect(calledCohortId).toBe(cohortId);
+    expect(calledSessionId).toBe(sessionId);
     expect(calledInstant.getTime()).toBe(new Date(newTime).getTime());
   });
 
@@ -297,8 +298,9 @@ describe("session management actions", () => {
     );
 
     expect(notifySessionCancelled).toHaveBeenCalledTimes(1);
-    const [, calledCohortId] = vi.mocked(notifySessionCancelled).mock.calls[0];
+    const [, calledCohortId, calledSessionId] = vi.mocked(notifySessionCancelled).mock.calls[0];
     expect(calledCohortId).toBe(cohortId);
+    expect(calledSessionId).toBe(sessionId);
   });
 
   it("does not notify members when the cancellation itself fails", async () => {

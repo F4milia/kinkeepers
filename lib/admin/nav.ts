@@ -50,6 +50,14 @@ export const ADMIN_NAV_ITEMS: AdminNavItem[] = [
     // facilitator persona has any reason to see.
     allowedRoles: ["admin"],
   },
+  {
+    href: "/admin/notifications",
+    label: () => "Notifications",
+    // Admin-only, same reasoning as Data requests directly above - the
+    // failed-send queue named in P4's acceptance criteria ("failed sends
+    // surface in an admin view").
+    allowedRoles: ["admin"],
+  },
 ];
 
 export function navItemsForRole(role: AppRole): AdminNavItem[] {

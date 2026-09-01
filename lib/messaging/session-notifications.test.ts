@@ -60,7 +60,12 @@ describe("session notifications", () => {
     if (cohortError || !cohort) throw cohortError ?? new Error("failed to create cohort");
     cohortId = cohort.id;
 
-    async function insertApplicant(status: string, email: string, timeZone: string | null = null) {
+    async function insertApplicant(
+      status: string,
+      email: string,
+      timeZone: string | null = null,
+      optedOut = false,
+    ) {
       const { data, error } = await admin
         .from("applicants")
         .insert({
@@ -71,6 +76,7 @@ describe("session notifications", () => {
           email,
           preferred_contact_channel: "email",
           time_zone: timeZone,
+          notifications_opted_out: optedOut,
         })
         .select("id")
         .single();
@@ -83,6 +89,7 @@ describe("session notifications", () => {
     await insertApplicant("attending", "attending-member@example.com", null);
     await insertApplicant("declined", "declined-member@example.com");
     await insertApplicant("pending_review", "pending-member@example.com");
+    await insertApplicant("enrolled", "opted-out-member@example.com", null, true);
   });
 
   afterAll(async () => {
@@ -92,8 +99,17 @@ describe("session notifications", () => {
     await admin.from("partner_organizations").delete().eq("id", orgId);
   });
 
-  it("notifySessionRescheduled only notifies enrolled/attending members, not declined or pending ones", async () => {
-    await notifySessionRescheduled(admin, cohortId, new Date("2027-03-09T18:30:00Z"), "America/New_York", "https://zoom.us/j/1");
+  const sessionId = "55555555-0000-0000-0000-00000000f001";
+
+  it("notifySessionRescheduled only notifies enrolled/attending members, not declined, pending, or opted-out ones", async () => {
+    await notifySessionRescheduled(
+      admin,
+      cohortId,
+      sessionId,
+      new Date("2027-03-09T18:30:00Z"),
+      "America/New_York",
+      "https://zoom.us/j/1",
+    );
 
     expect(notifyMember).toHaveBeenCalledTimes(2);
     const notifiedEmails = vi.mocked(notifyMember).mock.calls.map((call) => call[0].contact.email);
@@ -101,22 +117,64 @@ describe("session notifications", () => {
     expect(notifiedEmails).toContain("attending-member@example.com");
     expect(notifiedEmails).not.toContain("declined-member@example.com");
     expect(notifiedEmails).not.toContain("pending-member@example.com");
+    expect(notifiedEmails).not.toContain("opted-out-member@example.com");
   });
 
-  it("notifySessionRescheduled includes the new time and join link, never health information", async () => {
-    await notifySessionRescheduled(admin, cohortId, new Date("2027-03-09T18:30:00Z"), "America/New_York", "https://zoom.us/j/1");
+  it("notifySessionRescheduled includes the new time, join link, and an unsubscribe link, never health information", async () => {
+    await notifySessionRescheduled(
+      admin,
+      cohortId,
+      sessionId,
+      new Date("2027-03-09T18:30:00Z"),
+      "America/New_York",
+      "https://zoom.us/j/1",
+    );
 
     const [call] = vi.mocked(notifyMember).mock.calls;
     expect(call[0].emailHtml).toContain("https://zoom.us/j/1");
+    expect(call[0].emailHtml).toContain("/unsubscribe/");
+    expect(call[0].dedupKey).toContain(sessionId);
     expect(call[0].subject.toLowerCase()).not.toMatch(/dementia|caregiv|support group/);
     expect(call[0].emailHtml.toLowerCase()).not.toMatch(/dementia|caregiv|support group/);
     expect(call[0].smsBody.toLowerCase()).not.toMatch(/dementia|caregiv|support group/);
   });
 
+  it("a reschedule to a different time produces a different dedupKey than a previous reschedule of the same session", async () => {
+    await notifySessionRescheduled(
+      admin,
+      cohortId,
+      sessionId,
+      new Date("2027-03-09T18:30:00Z"),
+      "America/New_York",
+      null,
+    );
+    const firstKey = vi.mocked(notifyMember).mock.calls[0][0].dedupKey;
+
+    vi.clearAllMocks();
+    await notifySessionRescheduled(
+      admin,
+      cohortId,
+      sessionId,
+      new Date("2027-03-16T18:30:00Z"),
+      "America/New_York",
+      null,
+    );
+    const secondKey = vi.mocked(notifyMember).mock.calls[0][0].dedupKey;
+
+    expect(firstKey).not.toBe(secondKey);
+  });
+
   it("named edge case: a member in Honolulu, cohort in Eastern, gets both zones - not just the cohort's", async () => {
     // Mid-March, before the US DST change - matches the winter case
     // already named in cohort-meeting-time.test.ts's own edge case.
-    await notifySessionRescheduled(admin, cohortId, new Date("2027-03-09T18:30:00Z"), "America/New_York", null);
+    await notifySessionRescheduled(
+      admin,
+      cohortId,
+      sessionId,
+      new Date("2027-03-09T18:30:00Z"),
+      "America/New_York",
+      null,
+    );
 
     const calls = vi.mocked(notifyMember).mock.calls;
     const honoluluCall = calls.find((call) => call[0].contact.email === "enrolled-member@example.com")!;
@@ -131,10 +189,11 @@ describe("session notifications", () => {
   });
 
   it("notifySessionCancelled only notifies enrolled/attending members and never mentions dementia/caregiving", async () => {
-    await notifySessionCancelled(admin, cohortId, new Date("2027-03-09T18:30:00Z"), "America/New_York");
+    await notifySessionCancelled(admin, cohortId, sessionId, new Date("2027-03-09T18:30:00Z"), "America/New_York");
 
     expect(notifyMember).toHaveBeenCalledTimes(2);
     const [call] = vi.mocked(notifyMember).mock.calls;
+    expect(call[0].dedupKey).toContain(sessionId);
     expect(call[0].subject.toLowerCase()).not.toMatch(/dementia|caregiv|support group/);
     expect(call[0].emailHtml.toLowerCase()).not.toMatch(/dementia|caregiv|support group/);
   });
