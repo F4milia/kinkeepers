@@ -7,6 +7,7 @@ import {
   listDeclinedApplicants,
   declineApplicantAction,
   reopenApplicantAction,
+  withdrawApplicantAction,
 } from "@/lib/admin/applicants";
 
 // revalidatePath only works inside a real Next.js request - outside it
@@ -156,5 +157,69 @@ describe("applicant review queue", () => {
     await declineApplicantAction(pendingId, "other", adminClient);
     const result = await declineApplicantAction(pendingId, "other", adminClient);
     expect(result).toEqual({ success: false, error: expect.any(String) });
+  });
+
+  describe("withdrawApplicantAction (P5)", () => {
+    let cohortId: string;
+    let enrolledId: string;
+
+    beforeAll(async () => {
+      const { data: cohort, error: cohortError } = await admin
+        .from("cohorts")
+        .insert({
+          name: "Withdraw Test Cohort",
+          grouping_description: "x",
+          capacity: 8,
+          cadence: "weekly",
+          meeting_day_of_week: 2,
+          meeting_time: "18:30",
+          time_zone: "America/New_York",
+        })
+        .select("id")
+        .single();
+      if (cohortError || !cohort) throw cohortError ?? new Error("failed to create cohort");
+      cohortId = cohort.id;
+
+      const { data: row, error: rowError } = await admin
+        .from("applicants")
+        .insert({
+          partner_organization_id: partnerOrgId,
+          referral_source: "partner_link",
+          first_name: "Enrolled",
+          last_name: "Applicant",
+          status: "enrolled",
+          cohort_id: cohortId,
+        })
+        .select("id")
+        .single();
+      if (rowError || !row) throw rowError ?? new Error("failed to create enrolled applicant");
+      enrolledId = row.id;
+    });
+
+    afterAll(async () => {
+      await admin.from("applicants").delete().eq("id", enrolledId);
+      await admin.from("cohorts").delete().eq("id", cohortId);
+    });
+
+    it("rejects a non-admin caller", async () => {
+      const memberClient = await clientForUser(memberUser.id);
+      await expect(withdrawApplicantAction(enrolledId, "moved away", memberClient)).rejects.toThrow(ForbiddenError);
+    });
+
+    it("withdraws an enrolled applicant and records the reason", async () => {
+      const adminClient = await clientForUser(adminUser.id);
+      const result = await withdrawApplicantAction(enrolledId, "moved away", adminClient);
+      expect(result).toEqual({ success: true });
+
+      const { data } = await admin.from("applicants").select("status").eq("id", enrolledId).single();
+      expect(data?.status).toBe("withdrawn");
+    });
+
+    it("fails gracefully (not by throwing) when withdrawing an applicant who isn't enrolled or attending", async () => {
+      const adminClient = await clientForUser(adminUser.id);
+      // pendingId is pending_review at this point in the suite - never enrolled.
+      const result = await withdrawApplicantAction(pendingId, null, adminClient);
+      expect(result).toEqual({ success: false, error: expect.any(String) });
+    });
   });
 });

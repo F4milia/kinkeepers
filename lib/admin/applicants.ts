@@ -150,3 +150,32 @@ export async function reopenApplicantAction(
   revalidatePath("/admin/applicants");
   return { success: true };
 }
+
+/**
+ * P5: withdraw_applicant() and the member_dropped analytics event it
+ * writes (see the analytics_events migration) - built as part of P5
+ * because member_dropped had no real trigger at all beforehand, not
+ * because a withdraw feature was named in P5's own scope. No admin UI
+ * calls this yet - P5's prompt is explicitly "views or functions, not a
+ * dashboard," and no session in the run doc currently owns a "withdraw a
+ * member" screen. Flagging that gap here rather than inventing UI scope
+ * beyond what was asked.
+ */
+export async function withdrawApplicantAction(
+  applicantId: string,
+  reason: string | null,
+  callerClient?: SupabaseClient,
+): Promise<ApplicantMutationResult> {
+  const { userId } = await requireRole(["admin"], callerClient);
+  const admin = createAdminClient();
+  const { error } = await admin.rpc("withdraw_applicant", {
+    actor_id: userId,
+    target_applicant_id: applicantId,
+    reason,
+  });
+
+  if (error) return { success: false, error: "Something went wrong. Try again." };
+
+  revalidatePath("/admin/applicants");
+  return { success: true };
+}
