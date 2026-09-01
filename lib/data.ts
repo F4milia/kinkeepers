@@ -32,12 +32,14 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { DataUnavailableError } from "@/lib/data-errors";
 import { sessionDateTimeFields, zoneFriendlyLabel } from "@/lib/session-time";
+import { computeCertificationExpiryStatus } from "@/lib/certification-status";
 import type {
   Applicant,
   Cohort,
   CohortMember,
   CohortStatus,
   Facilitator,
+  FacilitatorCertification,
   Post,
   Session,
   SessionStatus,
@@ -420,6 +422,33 @@ export async function getNextFacilitatorSession(callerClient?: SupabaseClient): 
 export async function getFacilitatorSessionsNeedingLog(callerClient?: SupabaseClient): Promise<Session[]> {
   const sessions = await getFacilitatorSessions(callerClient);
   return sessions.filter((session) => session.status === "past");
+}
+
+/**
+ * F2: a facilitator's read-only self-view of their own certifications.
+ * No explicit role check here — same reasoning as every other facilitator
+ * function above: facilitator_certifications_select_own (granted in
+ * A4-cert) already scopes rows to `facilitator_id = auth.uid()`
+ * regardless of the caller's role, so RLS is the real boundary, not a
+ * check duplicated here. A non-facilitator account just gets zero rows.
+ */
+export async function getMyCertifications(callerClient?: SupabaseClient): Promise<FacilitatorCertification[]> {
+  const supabase = await resolveClient(callerClient);
+  const { data, error } = await supabase
+    .from("facilitator_certifications")
+    .select("id, certified_on, expires_on, certifying_body, programs(name)")
+    .order("expires_on", { ascending: true });
+  if (error) throw new DataUnavailableError(error.message);
+
+  const now = new Date();
+  return (data ?? []).map((row) => ({
+    id: row.id,
+    programName: (row.programs as unknown as { name: string } | null)?.name ?? "Unknown program",
+    certifiedOn: row.certified_on,
+    expiresOn: row.expires_on,
+    certifyingBody: row.certifying_body,
+    ...computeCertificationExpiryStatus(row.expires_on, now),
+  }));
 }
 
 // ---------------------------------------------------------------------

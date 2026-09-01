@@ -11,6 +11,7 @@ import {
   getPosts,
   getFacilitator,
   getApplicant,
+  getMyCertifications,
 } from "@/lib/data";
 
 const admin = createAdminClient();
@@ -206,5 +207,111 @@ describe("getApplicant (L4, against the real seeded rows in supabase/seed.sql)",
   it("returns completed status for a completed applicant", async () => {
     const applicant = await getApplicant("88888888-0000-0000-0000-000000000503", admin);
     expect(applicant?.status).toBe("completed");
+  });
+});
+
+describe("getMyCertifications (F2) - a facilitator's own self-view, scoped by facilitator_certifications_select_own", () => {
+  const programId = "77777777-0000-0000-0000-0000000f0201";
+  const currentCertId = "33333333-0000-0000-0000-0000000f0201";
+  const expiringSoonCertId = "33333333-0000-0000-0000-0000000f0202";
+  const expiredCertId = "33333333-0000-0000-0000-0000000f0203";
+  let facilitatorAId: string;
+  let facilitatorBId: string;
+
+  function daysFromNow(days: number): string {
+    return new Date(Date.now() + days * 86_400_000).toISOString().slice(0, 10);
+  }
+
+  beforeAll(async () => {
+    await admin.from("programs").insert({
+      id: programId,
+      name: "F2 Test Program",
+      developer: "Test Developer",
+      session_count: 6,
+      session_duration_minutes: 90,
+      delivery_formats: ["video"],
+      languages: ["English"],
+      facilitator_qualification: "Lay leader",
+      license_status: "licensed",
+    });
+
+    const { data: facA, error: facAError } = await admin.auth.admin.createUser({
+      email: `f2-facilitator-a-${Date.now()}@example.com`,
+      email_confirm: true,
+    });
+    if (facAError || !facA.user) throw facAError ?? new Error("createUser failed");
+    facilitatorAId = facA.user.id;
+    await admin.from("profiles").update({ role: "facilitator" }).eq("id", facilitatorAId);
+
+    const { data: facB, error: facBError } = await admin.auth.admin.createUser({
+      email: `f2-facilitator-b-${Date.now()}@example.com`,
+      email_confirm: true,
+    });
+    if (facBError || !facB.user) throw facBError ?? new Error("createUser failed");
+    facilitatorBId = facB.user.id;
+    await admin.from("profiles").update({ role: "facilitator" }).eq("id", facilitatorBId);
+
+    await admin.from("facilitator_certifications").insert([
+      {
+        id: currentCertId,
+        facilitator_id: facilitatorAId,
+        program_id: programId,
+        certified_on: daysFromNow(-300),
+        expires_on: daysFromNow(200),
+        certifying_body: "F2 Test Certifying Body",
+      },
+      {
+        id: expiringSoonCertId,
+        facilitator_id: facilitatorAId,
+        program_id: programId,
+        certified_on: daysFromNow(-300),
+        expires_on: daysFromNow(30),
+        certifying_body: "F2 Test Certifying Body",
+      },
+      {
+        id: expiredCertId,
+        facilitator_id: facilitatorAId,
+        program_id: programId,
+        certified_on: daysFromNow(-400),
+        expires_on: daysFromNow(-1),
+        certifying_body: "F2 Test Certifying Body",
+      },
+    ]);
+  });
+
+  afterAll(async () => {
+    await admin
+      .from("facilitator_certifications")
+      .delete()
+      .in("id", [currentCertId, expiringSoonCertId, expiredCertId]);
+    await admin.from("programs").delete().eq("id", programId);
+    await admin.auth.admin.deleteUser(facilitatorAId);
+    await admin.auth.admin.deleteUser(facilitatorBId);
+  });
+
+  it("returns only the signed-in facilitator's own certifications, ordered by soonest-expiring first, with correct expiry flags", async () => {
+    const client = await clientForUser(facilitatorAId);
+    const certifications = await getMyCertifications(client);
+
+    expect(certifications.map((c) => c.id)).toEqual([expiredCertId, expiringSoonCertId, currentCertId]);
+    expect(certifications.find((c) => c.id === currentCertId)).toMatchObject({
+      programName: "F2 Test Program",
+      isExpired: false,
+      isExpiringSoon: false,
+    });
+    expect(certifications.find((c) => c.id === expiringSoonCertId)).toMatchObject({
+      isExpired: false,
+      isExpiringSoon: true,
+    });
+    expect(certifications.find((c) => c.id === expiredCertId)).toMatchObject({
+      isExpired: true,
+      isExpiringSoon: false,
+    });
+  });
+
+  it("returns none of facilitator A's certifications for facilitator B - RLS isolation, not an admin-only check", async () => {
+    const client = await clientForUser(facilitatorBId);
+    const certifications = await getMyCertifications(client);
+    expect(certifications).toEqual([]);
   });
 });
