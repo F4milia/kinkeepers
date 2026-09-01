@@ -1,5 +1,5 @@
 import { requireRoleOrRefuse } from "@/lib/admin/require-role-or-refuse";
-import { listDataRequests } from "@/lib/admin/data-requests";
+import { listDataRequests, listConsentGaps } from "@/lib/admin/data-requests";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -17,7 +17,7 @@ export default async function AdminDataRequestsPage() {
   const result = await requireRoleOrRefuse(["admin"]);
   if ("refusal" in result) return result.refusal;
 
-  const requests = await listDataRequests();
+  const [requests, consentGaps] = await Promise.all([listDataRequests(), listConsentGaps()]);
 
   return (
     <div className="max-w-3xl">
@@ -56,6 +56,30 @@ export default async function AdminDataRequestsPage() {
                     <MarkDataRequestFulfilledButton requestId={request.id} />
                   </div>
                 ) : null}
+              </Card>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <h2 className="mt-8 text-h3 font-heading text-ink">Consent gaps</h2>
+      <p className="mt-2 text-body font-ui text-ink-soft">
+        Members who haven&apos;t agreed to the current version of a required document.
+      </p>
+
+      {consentGaps.length === 0 ? (
+        <div className="mt-6">
+          <EmptyState headline="No consent gaps" body="Every member is current on every document." />
+        </div>
+      ) : (
+        <ul className="mt-6 flex flex-col gap-3">
+          {consentGaps.map((gap) => (
+            <li key={`${gap.memberId}-${gap.documentType}`}>
+              <Card>
+                <p className="text-body font-ui font-medium text-ink">{gap.memberEmail ?? "Unknown member"}</p>
+                <p className="text-meta font-ui text-ink-soft">
+                  {gap.documentType.replace(/_/g, " ")} (version {gap.currentVersion})
+                </p>
               </Card>
             </li>
           ))}

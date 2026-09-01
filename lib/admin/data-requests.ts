@@ -63,6 +63,44 @@ export async function listDataRequests(callerClient?: SupabaseClient): Promise<D
   }));
 }
 
+export interface ConsentGap {
+  memberId: string;
+  memberEmail: string | null;
+  documentType: string;
+  currentVersion: number;
+}
+
+/**
+ * The "consent gaps ... queued" half of A5's acceptance criteria - a
+ * real gap found during review, not built alongside the data-request
+ * queue originally despite reusing the exact function P6 built for this
+ * ("A5's future admin queue" - see admin_list_consent_gaps's own
+ * migration comment). No timestamp: a gap is a current state, not a
+ * timestamped event - "queued with timestamps" describes the deletion/
+ * export requests above, which already have real ones.
+ */
+export async function listConsentGaps(callerClient?: SupabaseClient): Promise<ConsentGap[]> {
+  await requireRole(["admin"], callerClient);
+  const admin = createAdminClient();
+
+  const { data, error } = await admin.rpc("admin_list_consent_gaps");
+  if (error) throw error;
+
+  // No generated DB types exist in this project - same "as unknown as"
+  // cast already established elsewhere (e.g. lib/admin/cohorts.ts's
+  // programs(name) embed) for a shape Supabase-js can't infer on its own.
+  const gaps = data as unknown as Array<{ member_id: string; document_type: string; current_version: number }>;
+
+  const emails = await resolveEmails(admin, [...new Set(gaps.map((g) => g.member_id))]);
+
+  return gaps.map((g) => ({
+    memberId: g.member_id,
+    memberEmail: emails.get(g.member_id) ?? null,
+    documentType: g.document_type,
+    currentVersion: g.current_version,
+  }));
+}
+
 export type DataRequestMutationResult = { success: true } | { success: false; error: string };
 
 export async function markDataRequestFulfilledAction(
