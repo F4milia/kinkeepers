@@ -115,6 +115,7 @@ export async function rescheduleSessionAction(
       notifySessionRescheduled(
         admin,
         session.cohortId,
+        sessionId,
         new Date(newScheduledAt),
         session.cohortTimeZone,
         session.videoJoinUrl,
@@ -165,7 +166,8 @@ export async function cancelSessionAction(
   if (cancelError) return { success: false, error: cancelError.message };
 
   await notifyBestEffort(
-    () => notifySessionCancelled(admin, session.cohortId, new Date(session.scheduledAt), session.cohortTimeZone),
+    () =>
+      notifySessionCancelled(admin, session.cohortId, sessionId, new Date(session.scheduledAt), session.cohortTimeZone),
     { session_id: sessionId, cohort_id: session.cohortId },
   );
 

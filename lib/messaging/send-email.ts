@@ -31,17 +31,23 @@ export interface SendEmailParams {
  * the staging allowlist, no matter which caller forgets to check it
  * themselves.
  *
- * No RESEND_API_KEY configured is not exceptional - true in every
- * environment as of this writing (confirmed against the live Vercel
- * project - see lib/referral/send-resume-email.ts's own note). The
- * Resend SDK throws synchronously on a missing key, which the `if
- * (error)` check below can't catch (that only covers an error RETURNED
- * from .emails.send(), not a throw before it's ever called) - so this
- * logs and no-ops rather than crashing whatever feature called it, same
- * credential-gap treatment already used for Zoom and for this exact
- * Resend integration elsewhere in this codebase.
+ * RESEND_API_KEY is now configured on the live Vercel project (verified
+ * 2026-09-01 with a real production send) - but a missing/invalid key
+ * is still not treated as exceptional, since it was the normal state for
+ * most of this project's history and could be again (a rotated key, a
+ * misconfigured Preview environment). The Resend SDK throws
+ * synchronously on a missing key, which the `if (error)` check below
+ * can't catch (that only covers an error RETURNED from .emails.send(),
+ * not a throw before it's ever called) - so this logs and no-ops rather
+ * than crashing whatever feature called it, same credential-gap
+ * treatment already used for Zoom and for this exact Resend integration
+ * elsewhere in this codebase.
+ *
+ * Returns whether the send actually succeeded - callers that need to
+ * record the outcome (P4's notification_log) rely on this; a caller
+ * that doesn't care can still ignore it, same as when this returned void.
  */
-export async function sendEmail({ to, subject, html, logContext }: SendEmailParams): Promise<void> {
+export async function sendEmail({ to, subject, html, logContext }: SendEmailParams): Promise<boolean> {
   assertOutboundMessageAllowed(to);
 
   try {
@@ -54,11 +60,13 @@ export async function sendEmail({ to, subject, html, logContext }: SendEmailPara
 
     if (error) {
       logError("email_send_failed", logContext);
-      return;
+      return false;
     }
 
     log("email_sent", logContext);
+    return true;
   } catch {
     logError("email_send_failed", logContext);
+    return false;
   }
 }

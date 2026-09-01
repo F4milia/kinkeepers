@@ -10,6 +10,7 @@ describe("navItemsForRole", () => {
       "/admin/cohorts",
       "/admin/reports",
       "/admin/data-requests",
+      "/admin/notifications",
     ]);
   });
 

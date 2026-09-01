@@ -28,20 +28,30 @@ interface EnrolledMemberContact {
   applicantId: string;
   contact: MemberContact;
   timeZone: string | null;
+  unsubscribeToken: string;
 }
 
+/**
+ * `notifications_opted_out = false` is what makes unsubscribe actually
+ * stop delivery - an opted-out member simply never appears in this list,
+ * so nothing downstream needs its own opt-out check. Their status/
+ * cohort_id (real enrollment) is untouched by this filter or by
+ * lib/referral/unsubscribe.ts's own action.
+ */
 async function listEnrolledMembers(admin: SupabaseClient, cohortId: string): Promise<EnrolledMemberContact[]> {
   const { data, error } = await admin
     .from("applicants")
-    .select("id, email, phone, preferred_contact_channel, time_zone")
+    .select("id, email, phone, preferred_contact_channel, time_zone, notification_unsubscribe_token")
     .eq("cohort_id", cohortId)
-    .in("status", ["enrolled", "attending"]);
+    .in("status", ["enrolled", "attending"])
+    .eq("notifications_opted_out", false);
   if (error) throw error;
 
   return data.map((row) => ({
     applicantId: row.id,
     contact: { email: row.email, phone: row.phone, preferredContactChannel: row.preferred_contact_channel },
     timeZone: row.time_zone,
+    unsubscribeToken: row.notification_unsubscribe_token,
   }));
 }
 
@@ -70,9 +80,16 @@ function describeInstantForMember(instant: Date, memberTimeZone: string | null, 
   return `${memberSide} your time (${cohortSide} for the group)`;
 }
 
+/** The unsubscribe link every notification email footer carries - stops delivery, never touches enrollment. See lib/referral/unsubscribe.ts. */
+function unsubscribeLine(unsubscribeToken: string): string {
+  const url = `${process.env.NEXT_PUBLIC_SITE_URL}/unsubscribe/${unsubscribeToken}`;
+  return `<p><a href="${url}">Stop these emails</a></p>`;
+}
+
 export async function notifySessionRescheduled(
   admin: SupabaseClient,
   cohortId: string,
+  sessionId: string,
   newInstant: Date,
   cohortTimeZone: string,
   joinUrl: string | null,
@@ -80,15 +97,22 @@ export async function notifySessionRescheduled(
   const members = await listEnrolledMembers(admin, cohortId);
 
   await Promise.all(
-    members.map(({ applicantId, contact, timeZone }) => {
+    members.map(({ applicantId, contact, timeZone, unsubscribeToken }) => {
       const timeDescription = describeInstantForMember(newInstant, timeZone, cohortTimeZone);
       const joinLine = joinUrl ? ` Join link: ${joinUrl}.` : "";
       return notifyMember({
+        admin,
+        applicantId,
+        notificationType: "session_rescheduled",
+        // A second reschedule of the SAME session to a DIFFERENT time is
+        // a genuinely new notification (new instant in the key), not a
+        // duplicate - see the migration's own comment on this shape.
+        dedupKey: `${applicantId}:session_rescheduled:${sessionId}:${newInstant.toISOString()}`,
         contact,
         subject: "KinKeepers: your meeting time has changed",
-        emailHtml: `<p>Your KinKeepers meeting has a new time: ${timeDescription}.${joinLine}</p><p>Questions? Call ${COPY.support.phoneNumber}.</p>`,
-        smsBody: `KinKeepers: your meeting time changed to ${timeDescription}.${joinLine} Questions? Call ${COPY.support.phoneNumber}.`,
-        logContext: { applicant_id: applicantId, cohort_id: cohortId, notification: "session_rescheduled" },
+        emailHtml: `<p>Your KinKeepers meeting has a new time: ${timeDescription}.${joinLine}</p><p>Questions? Call ${COPY.support.phoneNumber}.</p>${unsubscribeLine(unsubscribeToken)}`,
+        smsBody: `KinKeepers: your meeting time changed to ${timeDescription}.${joinLine} Questions? Call ${COPY.support.phoneNumber}. Reply STOP to stop texts.`,
+        logContext: { applicant_id: applicantId, cohort_id: cohortId, session_id: sessionId, notification: "session_rescheduled" },
       });
     }),
   );
@@ -97,20 +121,28 @@ export async function notifySessionRescheduled(
 export async function notifySessionCancelled(
   admin: SupabaseClient,
   cohortId: string,
+  sessionId: string,
   cancelledInstant: Date,
   cohortTimeZone: string,
 ): Promise<void> {
   const members = await listEnrolledMembers(admin, cohortId);
 
   await Promise.all(
-    members.map(({ applicantId, contact, timeZone }) => {
+    members.map(({ applicantId, contact, timeZone, unsubscribeToken }) => {
       const timeDescription = describeInstantForMember(cancelledInstant, timeZone, cohortTimeZone);
       return notifyMember({
+        admin,
+        applicantId,
+        notificationType: "session_cancelled",
+        // A session can only be cancelled once (cancel_session's own
+        // guard: "only a scheduled session can be cancelled"), so the
+        // session id alone is a safe dedup key here - no instant needed.
+        dedupKey: `${applicantId}:session_cancelled:${sessionId}`,
         contact,
         subject: "KinKeepers: your meeting has been cancelled",
-        emailHtml: `<p>Your KinKeepers meeting on ${timeDescription} has been cancelled.</p><p>Questions? Call ${COPY.support.phoneNumber}.</p>`,
-        smsBody: `KinKeepers: your meeting on ${timeDescription} is cancelled. Questions? Call ${COPY.support.phoneNumber}.`,
-        logContext: { applicant_id: applicantId, cohort_id: cohortId, notification: "session_cancelled" },
+        emailHtml: `<p>Your KinKeepers meeting on ${timeDescription} has been cancelled.</p><p>Questions? Call ${COPY.support.phoneNumber}.</p>${unsubscribeLine(unsubscribeToken)}`,
+        smsBody: `KinKeepers: your meeting on ${timeDescription} is cancelled. Questions? Call ${COPY.support.phoneNumber}. Reply STOP to stop texts.`,
+        logContext: { applicant_id: applicantId, cohort_id: cohortId, session_id: sessionId, notification: "session_cancelled" },
       });
     }),
   );

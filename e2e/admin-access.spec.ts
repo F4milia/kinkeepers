@@ -22,6 +22,7 @@ const ADMIN_ROUTES = [
   "/admin/cohorts/00000000-0000-0000-0000-000000000000",
   "/admin/reports",
   "/admin/data-requests",
+  "/admin/notifications",
   "/admin/applicants",
   "/admin/applicants?tab=declined",
   "/admin/applicants?tab=waitlist",
