@@ -1,0 +1,32 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [{ "type": "command", "command": "bash .claude/hooks/guard-edit.sh" }]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [{ "type": "command", "command": "bash .claude/hooks/guard-bash.sh" }]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [{ "type": "command", "command": "bash .claude/hooks/check-file.sh", "timeout": 120 }]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [{ "type": "command", "command": "bash .claude/hooks/stop-tests.sh", "timeout": 300 }]
+      }
+    ]
+  },
+  "permissions": {
+    "allow": [
+      "Bash(npm test*)", "Bash(npm run *)", "Bash(npx tsc*)", "Bash(npx eslint*)",
+      "Bash(npx supabase *)", "Bash(npx playwright *)", "Bash(git add*)", "Bash(git commit*)",
+      "Bash(git push*)", "Bash(git checkout*)", "Bash(git rebase*)", "Bash(gh pr *)"
+    ]
+  }
+}
