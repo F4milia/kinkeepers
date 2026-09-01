@@ -459,10 +459,21 @@ export async function getApplicant(applicantId: string, adminClient?: SupabaseCl
       firstName: data.first_name ?? "",
       status: "pending_review",
       // No real "does an open cohort exist for this applicant" signal
-      // exists (confirmed with Ferenz - see this PR's description);
-      // always false rather than guessing, so this only ever renders the
-      // non-specific "we're finding your group" state.
-      hasMatchingCohort: false,
+      // exists (confirmed with Ferenz - see this PR's description) -
+      // always the same value rather than guessing, so every real
+      // pending_review applicant renders the same non-specific state.
+      //
+      // true, not false: app/(applicant)/status/[applicantId]/page.tsx's
+      // ternary is `hasMatchingCohort ? WaitingForReview : Waitlisted`,
+      // and Waitlisted additionally requires waitlistGroupingLabel/
+      // meetingTimeLabel (never set here) to render sensibly - it's the
+      // MORE specific state ("you're on the list, waiting for {grouping}"),
+      // not the generic one. true reaches WaitingForReview ("we're
+      // finding your group"), the non-specific message that was actually
+      // confirmed. Caught by Stream B while rebasing against this file -
+      // shipped as false originally, a real boolean inversion, not a
+      // pre-existing bug in the ternary itself.
+      hasMatchingCohort: true,
     };
   }
 

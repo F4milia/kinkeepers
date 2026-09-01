@@ -10,6 +10,7 @@ import {
   getSession,
   getPosts,
   getFacilitator,
+  getApplicant,
 } from "@/lib/data";
 
 const admin = createAdminClient();
@@ -175,5 +176,35 @@ describe("lib/data.ts against real endpoints (L5)", () => {
   it("getPosts and getFacilitator are honest not-yet-available states, never fabricated data", async () => {
     await expect(getPosts(cohortId)).resolves.toEqual([]);
     await expect(getFacilitator(cohortId)).resolves.toBeUndefined();
+  });
+});
+
+describe("getApplicant (L4, against the real seeded rows in supabase/seed.sql)", () => {
+  // Regression coverage for a real shipped bug (caught by Stream B while
+  // rebasing against this PR): app/(applicant)/status/[applicantId]/
+  // page.tsx's ternary is `hasMatchingCohort ? WaitingForReview :
+  // Waitlisted` - Waitlisted additionally needs waitlistGroupingLabel/
+  // meetingTimeLabel (never set here) to render sensibly, so it's the
+  // MORE specific state, not the generic one. This shipped as `false`
+  // originally, silently routing every real pending_review applicant to
+  // Waitlisted with both interpolations blank ("We're looking for ,
+  // meeting ."). No test caught it because the only prior coverage was
+  // an e2e smoke test asserting "no client-side error," which is true
+  // for both branches - this test asserts the actual value instead.
+  it("returns hasMatchingCohort: true for a pending_review applicant - the generic 'still finding' state, not the specific waitlist one", async () => {
+    const applicant = await getApplicant("88888888-0000-0000-0000-000000000001", admin);
+    expect(applicant?.status).toBe("pending_review");
+    expect(applicant?.hasMatchingCohort).toBe(true);
+  });
+
+  it("returns a real assigned session for an enrolled applicant", async () => {
+    const applicant = await getApplicant("88888888-0000-0000-0000-000000000502", admin);
+    expect(applicant?.status).toBe("enrolled");
+    expect(applicant?.assignedSession?.joinUrl).toBe("https://example.com/l5-demo-join");
+  });
+
+  it("returns completed status for a completed applicant", async () => {
+    const applicant = await getApplicant("88888888-0000-0000-0000-000000000503", admin);
+    expect(applicant?.status).toBe("completed");
   });
 });
