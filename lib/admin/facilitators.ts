@@ -5,8 +5,7 @@ import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireRole } from "@/lib/auth/roles";
 import { listFacilitators as listFacilitatorProfiles } from "@/lib/admin/cohorts";
-
-const EXPIRY_WARNING_DAYS = 60;
+import { computeCertificationExpiryStatus } from "@/lib/certification-status";
 
 export interface FacilitatorCertification {
   id: string;
@@ -74,9 +73,6 @@ export async function listFacilitatorsWithCertifications(
     .order("expires_on", { ascending: true });
   if (certsError) throw certsError;
 
-  const today = now.toISOString().slice(0, 10);
-  const warningDate = new Date(now.getTime() + EXPIRY_WARNING_DAYS * 86_400_000).toISOString().slice(0, 10);
-
   return facilitators.map((facilitator) => {
     const ownCohortIds = new Set(
       cohorts.filter((c) => c.facilitator_id === facilitator.id).map((c) => c.id),
@@ -91,8 +87,7 @@ export async function listFacilitatorsWithCertifications(
         certifiedOn: c.certified_on,
         expiresOn: c.expires_on,
         certifyingBody: c.certifying_body,
-        isExpired: c.expires_on < today,
-        isExpiringSoon: c.expires_on >= today && c.expires_on <= warningDate,
+        ...computeCertificationExpiryStatus(c.expires_on, now),
       }));
 
     return {

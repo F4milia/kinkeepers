@@ -133,6 +133,17 @@ export interface AssignedSession {
   facilitatorFirstName: string;
 }
 
+/** F2's own self-view of a certification — same shape as lib/admin/facilitators.ts's FacilitatorCertification, kept separate rather than shared since the admin type is defined in an admin-only module this file has no reason to depend on. */
+export interface FacilitatorCertification {
+  id: string;
+  programName: string;
+  certifiedOn: string;
+  expiresOn: string;
+  certifyingBody: string;
+  isExpired: boolean;
+  isExpiringSoon: boolean;
+}
+
 export interface Applicant {
   id: string;
   firstName: string;
