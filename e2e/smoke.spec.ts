@@ -72,6 +72,31 @@ test("applicant status — completed renders the program-complete state", async 
   await expect(page.getByText("You've completed the program")).toBeVisible();
 });
 
+// L4 acceptance criteria, checked directly against the real backend.
+//
+// "The waitlist names the specific grouping sought" is NOT covered here,
+// even though L4 built it (Waitlisted, in app/(applicant)/status -
+// [applicantId]/page.tsx, keyed off hasMatchingCohort === false): per the
+// PAGES comment above, hasMatchingCohort is hardcoded true in
+// getApplicant() because no real "does a matching cohort exist" signal
+// exists yet, so that branch is unreachable with real data today, not
+// just untested. Re-add this once a real signal exists to drive it.
+test("applicant status — waiting-for-review shows the support phone number", async ({ page }) => {
+  await page.goto("/status/88888888-0000-0000-0000-000000000001");
+  await page.getByRole("button", { name: "Get help now" }).click();
+  await expect(page.getByRole("link", { name: "Call 1-800-555-0142" })).toBeVisible();
+});
+
+test("applicant status — completed has no gamification, no certificate, badge, or celebration language", async ({
+  page,
+}) => {
+  await page.goto("/status/88888888-0000-0000-0000-000000000503");
+  await expect(page.getByText("You've completed the program")).toBeVisible();
+  for (const term of ["Congratulations", "Certificate", "Badge", "Achievement", "🎉"]) {
+    await expect(page.getByText(term)).toHaveCount(0);
+  }
+});
+
 // L1: every (caregiver) route now requires a signed-in session -
 // unauthenticated access redirects to /sign-in rather than rendering
 // fixture content to anyone who shows up. Same pattern as
