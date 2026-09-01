@@ -68,6 +68,15 @@ export const ADMIN_NAV_ITEMS: AdminNavItem[] = [
     // all per A1's persona table.
     allowedRoles: ["admin"],
   },
+  {
+    href: "/admin/audit-log",
+    label: () => "Audit log",
+    // Admin-only - audit_log.sql's own migration comment: "A5 (Wave 7)
+    // owns the actual admin-facing screen and does its own role check
+    // there before querying." A real gap found during A5's own
+    // acceptance-criteria review, not a deliberate deferral.
+    allowedRoles: ["admin"],
+  },
 ];
 
 export function navItemsForRole(role: AppRole): AdminNavItem[] {

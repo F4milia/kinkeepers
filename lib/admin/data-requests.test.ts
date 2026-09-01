@@ -2,7 +2,7 @@ import { describe, expect, it, vi, beforeAll, afterAll } from "vitest";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { ForbiddenError } from "@/lib/auth/roles";
 import { clientForUser } from "@/test/helpers/local-auth";
-import { listDataRequests, markDataRequestFulfilledAction } from "@/lib/admin/data-requests";
+import { listDataRequests, markDataRequestFulfilledAction, listConsentGaps } from "@/lib/admin/data-requests";
 
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 
@@ -86,5 +86,20 @@ describe("data requests admin queue", () => {
 
     const result = await markDataRequestFulfilledAction(requestId, "", adminClient);
     expect(result.success).toBe(false);
+  });
+
+  it("rejects a non-admin caller for consent gaps too", async () => {
+    const memberClient = await clientForUser(memberUser.id);
+    await expect(listConsentGaps(memberClient)).rejects.toThrow(ForbiddenError);
+  });
+
+  it("lists a member with no consent history as having a gap for every current document, with their email resolved", async () => {
+    const adminClient = await clientForUser(adminUser.id);
+    const gaps = await listConsentGaps(adminClient);
+
+    const ours = gaps.filter((g) => g.memberId === memberUser.id);
+    expect(ours.length).toBeGreaterThan(0);
+    expect(ours.every((g) => g.memberEmail === memberUser.email)).toBe(true);
+    expect(gaps.some((g) => g.memberId === adminUser.id)).toBe(false);
   });
 });

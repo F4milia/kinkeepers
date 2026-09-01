@@ -23,6 +23,7 @@ const ADMIN_ROUTES = [
   "/admin/reports",
   "/admin/data-requests",
   "/admin/notifications",
+  "/admin/audit-log",
   "/admin/applicants",
   "/admin/applicants?tab=declined",
   "/admin/applicants?tab=waitlist",

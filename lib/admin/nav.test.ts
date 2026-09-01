@@ -12,6 +12,7 @@ describe("navItemsForRole", () => {
       "/admin/data-requests",
       "/admin/notifications",
       "/admin/facilitators",
+      "/admin/audit-log",
     ]);
   });
 
