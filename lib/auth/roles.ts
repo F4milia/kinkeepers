@@ -4,6 +4,24 @@ import { createClient } from "@/lib/supabase/server";
 
 export type AppRole = "admin" | "facilitator" | "partner_staff" | "member";
 
+// Where a signed-in user lands after the magic-link callback with no
+// explicit `next` override. Kept as a pure lookup (not a redirect() call
+// itself) so it's testable without a Next.js request context - see this
+// file's own note on resolveUserAndRole for the same reasoning. A
+// facilitator has no applicant row, so redirecting them to "/" (the
+// caregiver home, keyed off getViewer()'s applicant lookup) 404s; admin
+// and partner_staff share /admin, narrowed per-page from there.
+const ROLE_HOME_PATH: Record<AppRole, string> = {
+  facilitator: "/facilitator",
+  admin: "/admin",
+  partner_staff: "/admin",
+  member: "/",
+};
+
+export function roleHomePath(role: AppRole | null): string {
+  return role ? ROLE_HOME_PATH[role] : "/";
+}
+
 export class UnauthenticatedError extends Error {
   constructor() {
     super("No signed-in user");

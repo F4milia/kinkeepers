@@ -1,7 +1,7 @@
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { describe, expect, it, beforeAll, afterAll } from "vitest";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { resolveUserAndRole, ForbiddenError } from "@/lib/auth/roles";
+import { resolveUserAndRole, ForbiddenError, roleHomePath } from "@/lib/auth/roles";
 import { clientForUser } from "@/test/helpers/local-auth";
 
 describe("resolveUserAndRole", () => {
@@ -57,6 +57,22 @@ describe("resolveUserAndRole", () => {
     } finally {
       await admin.auth.admin.deleteUser(other.user.id);
     }
+  });
+});
+
+describe("roleHomePath", () => {
+  it("sends a facilitator to /facilitator, not / (which 404s - no applicant row)", () => {
+    expect(roleHomePath("facilitator")).toBe("/facilitator");
+  });
+
+  it("sends admin and partner_staff to /admin", () => {
+    expect(roleHomePath("admin")).toBe("/admin");
+    expect(roleHomePath("partner_staff")).toBe("/admin");
+  });
+
+  it("sends a member, and a null (unresolved) role, to /", () => {
+    expect(roleHomePath("member")).toBe("/");
+    expect(roleHomePath(null)).toBe("/");
   });
 });
 
