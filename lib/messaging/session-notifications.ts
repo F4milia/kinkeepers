@@ -73,7 +73,7 @@ async function listEnrolledMembers(admin: SupabaseClient, cohortId: string): Pro
  * (it requires a zone; callers already default to the cohort's own when
  * the applicant's is unknown - see lib/admin/assignment.ts).
  */
-function describeInstantForMember(instant: Date, memberTimeZone: string | null, cohortTimeZone: string): string {
+export function describeInstantForMember(instant: Date, memberTimeZone: string | null, cohortTimeZone: string): string {
   const cohortSide = formatMeetingTime(instant, cohortTimeZone);
   if (!memberTimeZone) return cohortSide;
   const memberSide = formatMeetingTime(instant, memberTimeZone);
@@ -81,7 +81,7 @@ function describeInstantForMember(instant: Date, memberTimeZone: string | null, 
 }
 
 /** The unsubscribe link every notification email footer carries - stops delivery, never touches enrollment. See lib/referral/unsubscribe.ts. */
-function unsubscribeLine(unsubscribeToken: string): string {
+export function unsubscribeLine(unsubscribeToken: string): string {
   const url = `${process.env.NEXT_PUBLIC_SITE_URL}/unsubscribe/${unsubscribeToken}`;
   return `<p><a href="${url}">Stop these emails</a></p>`;
 }

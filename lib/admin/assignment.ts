@@ -7,6 +7,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { requireRole } from "@/lib/auth/roles";
 import { describeCohortMeetingForApplicant } from "@/lib/admin/cohort-meeting-time";
 import type { ApplicantMutationResult } from "@/lib/admin/applicants";
+import { notifyCohortAssigned } from "@/lib/messaging/applicant-notifications";
+import { notifyBestEffort } from "@/lib/messaging/notify-best-effort";
 
 export interface CompositionGroup {
   relationship: string | null;
@@ -107,6 +109,13 @@ export async function assignApplicantToCohortAction(
   });
 
   if (error) return { success: false, error: "Something went wrong. Try again." };
+
+  // X3 message 2/7. Best-effort, same reasoning as every other
+  // notification wired into an admin mutation this way.
+  await notifyBestEffort(
+    () => notifyCohortAssigned(admin, applicantId, cohortId),
+    { applicant_id: applicantId, cohort_id: cohortId },
+  );
 
   revalidatePath("/admin/applicants");
   // Redirect rather than leaving the reviewer on this now-stale detail
