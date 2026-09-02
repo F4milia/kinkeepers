@@ -20,6 +20,9 @@ export interface CachedNextSession {
   time: string;
   timeZoneLabel: string;
   joinUrl: string | null;
+  /** X4: visible everywhere the join link appears, including here - a flaky connection is exactly when the phone option matters most. */
+  dialInNumber: string | null;
+  dialInPin: string | null;
   deliveryFormat: "video" | "in_person";
   sessionNumber: number;
   sessionTotal: number;

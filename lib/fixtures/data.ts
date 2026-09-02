@@ -73,6 +73,8 @@ export const sessions: Session[] = [
     // meeting" page rather than a stranger's real call, the same reasoning
     // as the 555-01XX support number in Part 3.1.
     joinUrl: "https://zoom.us/j/0000000000",
+    dialInNumber: "1-555-010-0000",
+    dialInPin: "000000",
     materialsCount: 1,
     attendingCount: 7,
   },
@@ -89,6 +91,8 @@ export const sessions: Session[] = [
     deliveryFormat: "video",
     topic: null,
     joinUrl: null,
+    dialInNumber: null,
+    dialInPin: null,
     materialsCount: 0,
     attendance: { present: 8, absent: 1, excused: 1 },
     // Per-member marks consistent with the aggregate counts above — Part 3.2
@@ -122,6 +126,8 @@ export const sessions: Session[] = [
     deliveryFormat: "video",
     topic: null,
     joinUrl: null,
+    dialInNumber: null,
+    dialInPin: null,
     materialsCount: 0,
     attendance: { present: 9, absent: 0, excused: 1 },
     attendanceByMember: {
@@ -157,6 +163,8 @@ export const sessions: Session[] = [
     deliveryFormat: "in_person",
     topic: null,
     joinUrl: null,
+    dialInNumber: null,
+    dialInPin: null,
     materialsCount: 0,
     attendingCount: 6,
   },
@@ -175,6 +183,8 @@ export const sessions: Session[] = [
     deliveryFormat: "in_person",
     topic: null,
     joinUrl: null,
+    dialInNumber: null,
+    dialInPin: null,
     materialsCount: 0,
   },
 ];
