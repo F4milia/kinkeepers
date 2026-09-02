@@ -209,9 +209,14 @@ insert into consent_documents (document_type, version, body, is_placeholder) val
 -- domain deliverability, but F3's QA needed a real production
 -- click-through too, and Resend genuinely refuses to deliver to
 -- @example.com - confirmed live (attempted sign-in on
--- kinkeepers.vercel.app, got "We couldn't send that"). Ferenz's own
--- address, at his direct instruction, is the one real inbox this
--- specific fixture can safely use.
+-- kinkeepers.vercel.app, got "We couldn't send that"). A plus-addressed
+-- variant of Ferenz's own address, at his direct instruction (plain
+-- ferenz@brandlamb.com already belongs to his real production admin
+-- account - auth.users.email is uniquely constrained, so it couldn't be
+-- reused here even if that were otherwise a good idea; confirmed live
+-- with a real "duplicate key" error before switching to this). Confirmed
+-- brandlamb.com's mail provider actually delivers plus-addressed mail to
+-- the same inbox before relying on it here.
 insert into auth.users (
   instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
   raw_app_meta_data, raw_user_meta_data, created_at, updated_at, confirmation_token,
@@ -219,13 +224,13 @@ insert into auth.users (
 ) values (
   '00000000-0000-0000-0000-000000000000',
   '66666666-0000-0000-0000-0000000f2601',
-  'authenticated', 'authenticated', 'ferenz@brandlamb.com', '', now(),
+  'authenticated', 'authenticated', 'ferenz+kinkeepers@brandlamb.com', '', now(),
   '{"provider":"email","providers":["email"]}', '{}', now(), now(), '', '', '', ''
 );
 
 insert into auth.identities (id, user_id, provider_id, identity_data, provider, last_sign_in_at, created_at, updated_at) values (
   gen_random_uuid(), '66666666-0000-0000-0000-0000000f2601', '66666666-0000-0000-0000-0000000f2601',
-  '{"sub":"66666666-0000-0000-0000-0000000f2601","email":"ferenz@brandlamb.com","email_verified":true,"phone_verified":false}',
+  '{"sub":"66666666-0000-0000-0000-0000000f2601","email":"ferenz+kinkeepers@brandlamb.com","email_verified":true,"phone_verified":false}',
   'email', now(), now(), now()
 );
 
