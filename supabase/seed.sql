@@ -243,3 +243,32 @@ insert into facilitator_certifications (id, facilitator_id, program_id, certifie
     (select id from programs where name = 'Tele-Savvy'),
     current_date - 400, current_date - 5, 'BPC National Training Center'
   );
+
+-- F3 QA fixture: a real cohort assigned to Renata, so /facilitator/
+-- schedule -> prep is actually clickable, not just pgTAP/vitest-verified.
+-- No program_id: every program in this seed stays unlicensed by design
+-- (see the X2 seed comment above) and enforce_cohort_program_and_
+-- facilitator only skips its license check when program_id is null -
+-- same "null is the honest state, not a shortcut" reasoning the L5 Demo
+-- Cohort already uses. That means this fixture can only demonstrate
+-- F3's roster half live - materials are certification-gated per
+-- *program*, so they need a real program_id to attach to at all, which
+-- would require flipping a program to 'licensed' outright. Not done
+-- here - see docs/qa/F3.md for why, and for the pgTAP/vitest suites that
+-- verify the materials/certification-gating half instead.
+insert into cohorts (id, name, grouping_description, capacity, cadence, meeting_day_of_week, meeting_time, time_zone, facilitator_id, status) values
+  (
+    '99999999-0000-0000-0000-0000000f2601', 'Renata''s Cohort (F3 QA fixture)',
+    'Fixture cohort for testing the facilitator session-prep roster',
+    8, 'weekly', 2, '18:30', 'America/New_York', '66666666-0000-0000-0000-0000000f2601', 'active'
+  );
+
+insert into applicants (id, partner_organization_id, referral_source, first_name, last_name, status, cohort_id) values
+  (
+    '88888888-0000-0000-0000-0000000f2601',
+    (select id from partner_organizations where name = 'Riverside Health Network'),
+    'partner_link', 'Jamie', 'Ellis', 'enrolled', '99999999-0000-0000-0000-0000000f2601'
+  );
+
+insert into sessions (id, cohort_id, session_number, scheduled_at) values
+  ('55555555-0000-0000-0000-0000000f2601', '99999999-0000-0000-0000-0000000f2601', 1, now() + interval '7 days');

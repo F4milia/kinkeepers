@@ -132,6 +132,12 @@ const CAREGIVER_ROUTES = [
   "/facilitator",
   "/facilitator/schedule",
   "/facilitator/certifications",
+  // requireRole-equivalent checks inside getSession/getSessionPrepRoster
+  // run before any not-found resolution, same reasoning as the admin
+  // applicant/partner-edit routes in admin-access.spec.ts - an
+  // unauthenticated visitor gets the redirect without this id ever
+  // needing to resolve to a real row.
+  "/facilitator/session/00000000-0000-0000-0000-000000000000/prep",
 ];
 
 for (const path of CAREGIVER_ROUTES) {

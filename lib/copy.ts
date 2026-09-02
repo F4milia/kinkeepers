@@ -181,6 +181,17 @@ export const COPY = {
       expiring_soon: "Expires soon",
       current: "Current",
     },
+    // F3: plain functional labels, same low-risk precedent F1/F2 already
+    // established for structural titles with no literal prompt copy to
+    // quote from.
+    prep: {
+      title: "Session prep",
+      roster_title: "Roster",
+      attended_label: "Attended {n} of your past sessions",
+      materials_title: "Materials",
+      empty_roster: "No one is enrolled in this cohort yet.",
+      empty_materials: "No materials for this session yet.",
+    },
   },
   /**
    * L1 (sign-in), amended per Ferenz's direct instruction: email only for
