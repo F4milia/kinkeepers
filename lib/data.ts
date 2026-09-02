@@ -44,6 +44,8 @@ import type {
   Post,
   Session,
   SessionAttendance,
+  SessionPrepMaterial,
+  SessionPrepRosterEntry,
   SessionStatus,
 } from "@/lib/types";
 
@@ -486,6 +488,74 @@ export async function getNextFacilitatorSession(callerClient?: SupabaseClient): 
 export async function getFacilitatorSessionsNeedingLog(callerClient?: SupabaseClient): Promise<Session[]> {
   const sessions = await getFacilitatorSessions(callerClient);
   return sessions.filter((session) => session.status === "past");
+}
+
+/**
+ * F3: session prep roster. Deliberately NOT a new RPC - composes two
+ * already-audited, already-RLS-protected access paths instead of
+ * duplicating the ownership check they both already make: the session's
+ * cohort_id (sessions_select_own_facilitator already scopes this to the
+ * caller's own sessions), X4's list_cohort_roster_for_facilitator() for
+ * the roster itself, and a direct session_attendance query
+ * (session_attendance_select_own_facilitator already scopes this the
+ * same way) aggregated into a real per-member count - never per-member
+ * free text. Not certification-gated, unlike materials below: a
+ * facilitator whose certification has lapsed still legitimately needs to
+ * see who's coming.
+ */
+export async function getSessionPrepRoster(
+  sessionId: string,
+  callerClient?: SupabaseClient,
+): Promise<SessionPrepRosterEntry[]> {
+  const supabase = await resolveClient(callerClient);
+
+  const { data: session, error: sessionError } = await supabase
+    .from("sessions")
+    .select("cohort_id")
+    .eq("id", sessionId)
+    .maybeSingle();
+  if (sessionError) throw new DataUnavailableError(sessionError.message);
+  if (!session) notFound();
+
+  const [roster, attendanceResult] = await Promise.all([
+    getCohortMembersForFacilitator(session.cohort_id, supabase),
+    supabase
+      .from("session_attendance")
+      .select("applicant_id, status, sessions!inner(cohort_id)")
+      .eq("sessions.cohort_id", session.cohort_id)
+      .eq("status", "present"),
+  ]);
+  if (attendanceResult.error) throw new DataUnavailableError(attendanceResult.error.message);
+
+  const attendedCounts = new Map<string, number>();
+  for (const row of attendanceResult.data ?? []) {
+    attendedCounts.set(row.applicant_id, (attendedCounts.get(row.applicant_id) ?? 0) + 1);
+  }
+
+  return roster.map((member) => ({
+    applicantId: member.id,
+    firstName: member.firstName,
+    sessionsAttended: attendedCounts.get(member.id) ?? 0,
+  }));
+}
+
+/**
+ * F3: session materials, restricted to a currently-certified owning
+ * facilitator - get_session_prep_materials() raises before returning
+ * anything otherwise. Surfaces here as the same DataUnavailableError
+ * every other data-layer failure does (see lib/data-errors.ts's own
+ * comment on why this codebase deliberately doesn't distinguish "why" a
+ * fetch failed beyond that it did).
+ */
+export async function getSessionPrepMaterials(
+  sessionId: string,
+  callerClient?: SupabaseClient,
+): Promise<SessionPrepMaterial[]> {
+  const supabase = await resolveClient(callerClient);
+  const { data, error } = await supabase.rpc("get_session_prep_materials", { target_session_id: sessionId });
+  if (error) throw new DataUnavailableError(error.message);
+  const rows = (data ?? []) as unknown as Array<{ material_id: string; title: string; storage_path: string }>;
+  return rows.map((row) => ({ id: row.material_id, title: row.title }));
 }
 
 /**

@@ -12,6 +12,8 @@ import {
   getFacilitator,
   getApplicant,
   getMyCertifications,
+  getSessionPrepRoster,
+  getSessionPrepMaterials,
 } from "@/lib/data";
 
 const admin = createAdminClient();
@@ -207,6 +209,172 @@ describe("getApplicant (L4, against the real seeded rows in supabase/seed.sql)",
   it("returns completed status for a completed applicant", async () => {
     const applicant = await getApplicant("88888888-0000-0000-0000-000000000503", admin);
     expect(applicant?.status).toBe("completed");
+  });
+});
+
+describe("getSessionPrepRoster / getSessionPrepMaterials (F3)", () => {
+  const partnerOrgId = "11111111-0000-0000-0000-0000000f3101";
+  const programId = "77777777-0000-0000-0000-0000000f3101";
+  const cohortId = "99999999-0000-0000-0000-0000000f3101";
+  const pastSessionId = "55555555-0000-0000-0000-0000000f3101";
+  const prepSessionId = "55555555-0000-0000-0000-0000000f3102";
+  const attendedApplicantId = "88888888-0000-0000-0000-0000000f3101";
+  const absentApplicantId = "88888888-0000-0000-0000-0000000f3102";
+  const materialId = "22222222-0000-0000-0000-0000000f3101";
+  let facilitatorUserId: string;
+  let unrelatedFacilitatorUserId: string;
+
+  beforeAll(async () => {
+    await admin.from("partner_organizations").insert({
+      id: partnerOrgId,
+      name: "F3 Data Test Org",
+      referral_link_slug: "f3-data-test-org",
+    });
+
+    await admin.from("programs").insert({
+      id: programId,
+      name: "F3 Data Test Program",
+      developer: "Test Developer",
+      session_count: 2,
+      session_duration_minutes: 90,
+      delivery_formats: ["video"],
+      languages: ["English"],
+      facilitator_qualification: "Lay leader",
+      license_status: "licensed",
+    });
+    await admin.from("program_sessions").insert([
+      { program_id: programId, session_number: 1 },
+      { program_id: programId, session_number: 2 },
+    ]);
+
+    const { data: facilitatorUser, error: facilitatorError } = await admin.auth.admin.createUser({
+      email: `f3-data-test-facilitator-${Date.now()}@example.com`,
+      email_confirm: true,
+    });
+    if (facilitatorError || !facilitatorUser.user) throw facilitatorError ?? new Error("createUser failed");
+    facilitatorUserId = facilitatorUser.user.id;
+    await admin.from("profiles").update({ role: "facilitator" }).eq("id", facilitatorUserId);
+
+    const { data: unrelatedUser, error: unrelatedError } = await admin.auth.admin.createUser({
+      email: `f3-data-test-unrelated-${Date.now()}@example.com`,
+      email_confirm: true,
+    });
+    if (unrelatedError || !unrelatedUser.user) throw unrelatedError ?? new Error("createUser failed");
+    unrelatedFacilitatorUserId = unrelatedUser.user.id;
+    await admin.from("profiles").update({ role: "facilitator" }).eq("id", unrelatedFacilitatorUserId);
+
+    // Certified at insert time so A4-cert's cohort-assignment trigger
+    // allows the cohort insert below, exactly like the pgTAP fixture.
+    await admin.from("facilitator_certifications").insert({
+      facilitator_id: facilitatorUserId,
+      program_id: programId,
+      certified_on: new Date(Date.now() - 30 * 86_400_000).toISOString().slice(0, 10),
+      expires_on: new Date(Date.now() + 300 * 86_400_000).toISOString().slice(0, 10),
+      certifying_body: "F3 Data Test Certifying Body",
+    });
+
+    await admin.from("cohorts").insert({
+      id: cohortId,
+      name: "F3 Data Test Cohort",
+      grouping_description: "Test grouping",
+      capacity: 8,
+      cadence: "weekly",
+      meeting_day_of_week: 2,
+      meeting_time: "18:30",
+      time_zone: "America/New_York",
+      program_id: programId,
+      facilitator_id: facilitatorUserId,
+      status: "active",
+    });
+
+    await admin.from("applicants").insert([
+      {
+        id: attendedApplicantId,
+        partner_organization_id: partnerOrgId,
+        referral_source: "partner_link",
+        first_name: "Devon",
+        status: "enrolled",
+        cohort_id: cohortId,
+      },
+      {
+        id: absentApplicantId,
+        partner_organization_id: partnerOrgId,
+        referral_source: "partner_link",
+        first_name: "Sam",
+        status: "enrolled",
+        cohort_id: cohortId,
+      },
+    ]);
+
+    await admin.from("sessions").insert([
+      { id: pastSessionId, cohort_id: cohortId, session_number: 1, scheduled_at: new Date(Date.now() - 7 * 86_400_000).toISOString(), status: "completed" },
+      { id: prepSessionId, cohort_id: cohortId, session_number: 2, scheduled_at: new Date(Date.now() + 7 * 86_400_000).toISOString(), status: "scheduled" },
+    ]);
+
+    await admin.from("session_attendance").insert([
+      { session_id: pastSessionId, applicant_id: attendedApplicantId, status: "present", marked_by: facilitatorUserId },
+      { session_id: pastSessionId, applicant_id: absentApplicantId, status: "absent", marked_by: facilitatorUserId },
+    ]);
+
+    const { data: programSessionTwo } = await admin
+      .from("program_sessions")
+      .select("id")
+      .eq("program_id", programId)
+      .eq("session_number", 2)
+      .single();
+    await admin.from("session_materials").insert({
+      id: materialId,
+      program_session_id: programSessionTwo!.id,
+      title: "F3 data test slides",
+      storage_path: "placeholder/f3-data-test-slides.pdf",
+    });
+  });
+
+  afterAll(async () => {
+    await admin.from("session_materials").delete().eq("id", materialId);
+    await admin.from("session_attendance").delete().in("session_id", [pastSessionId, prepSessionId]);
+    await admin.from("sessions").delete().in("id", [pastSessionId, prepSessionId]);
+    await admin.from("applicants").delete().in("id", [attendedApplicantId, absentApplicantId]);
+    await admin.from("cohorts").delete().eq("id", cohortId);
+    await admin.from("program_sessions").delete().eq("program_id", programId);
+    await admin.from("programs").delete().eq("id", programId);
+    await admin.from("partner_organizations").delete().eq("id", partnerOrgId);
+    await admin.auth.admin.deleteUser(unrelatedFacilitatorUserId);
+    await admin.auth.admin.deleteUser(facilitatorUserId);
+  });
+
+  it("getSessionPrepRoster returns the real roster with a real per-member attendance count, never a notes field", async () => {
+    const client = await clientForUser(facilitatorUserId);
+    const roster = await getSessionPrepRoster(prepSessionId, client);
+
+    expect(roster).toHaveLength(2);
+    const attended = roster.find((r) => r.applicantId === attendedApplicantId);
+    const absent = roster.find((r) => r.applicantId === absentApplicantId);
+    expect(attended).toMatchObject({ firstName: "Devon", sessionsAttended: 1 });
+    expect(absent).toMatchObject({ firstName: "Sam", sessionsAttended: 0 });
+    expect(Object.keys(attended!)).toEqual(["applicantId", "firstName", "sessionsAttended"]);
+  });
+
+  it("getSessionPrepRoster rejects a facilitator who does not own this session", async () => {
+    const client = await clientForUser(unrelatedFacilitatorUserId);
+    await expect(getSessionPrepRoster(prepSessionId, client)).rejects.toThrow();
+  });
+
+  it("getSessionPrepMaterials returns real materials for a currently-certified owning facilitator", async () => {
+    const client = await clientForUser(facilitatorUserId);
+    const materials = await getSessionPrepMaterials(prepSessionId, client);
+    expect(materials).toEqual([{ id: materialId, title: "F3 data test slides" }]);
+  });
+
+  it("getSessionPrepMaterials rejects an owning facilitator whose certification has lapsed", async () => {
+    await admin
+      .from("facilitator_certifications")
+      .update({ expires_on: new Date(Date.now() - 86_400_000).toISOString().slice(0, 10) })
+      .eq("facilitator_id", facilitatorUserId)
+      .eq("program_id", programId);
+
+    const client = await clientForUser(facilitatorUserId);
+    await expect(getSessionPrepMaterials(prepSessionId, client)).rejects.toThrow();
   });
 });
 

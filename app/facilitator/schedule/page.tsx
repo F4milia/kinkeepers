@@ -30,26 +30,43 @@ function ScheduleRow({
   cohortsById: Map<string, Cohort>;
 }) {
   const cohort = cohortsById.get(session.cohortId);
+  const rowContent = (
+    <>
+      <p className="text-meta font-ui text-ink-soft">{cohort?.name}</p>
+      <p className="text-body font-ui font-medium text-ink">
+        {formatSessionDay(session.date)} · {session.time} {session.timeZoneLabel}
+      </p>
+      <div className="flex flex-wrap gap-2">
+        {session.status === "past" && <LogStatus session={session} />}
+        {session.overlapsSessionIds.map((otherId) => {
+          const otherCohort = cohortsById.get(sessionsById.get(otherId)?.cohortId ?? "");
+          return (
+            <Badge key={otherId} variant="gentle">
+              {format(COPY.facilitator.schedule.overlaps_with, { cohortName: otherCohort?.name ?? "" })}
+            </Badge>
+          );
+        })}
+      </div>
+    </>
+  );
+
+  // F3: an upcoming session links to its prep view (roster + materials) -
+  // past sessions stay static here, same as before F3; their own
+  // destination is the session-log flow, a separate and pre-existing gap
+  // this PR doesn't touch.
+  if (session.status === "upcoming") {
+    return (
+      <li>
+        <Card interactive href={`/facilitator/session/${session.id}/prep`} className="flex flex-col gap-2">
+          {rowContent}
+        </Card>
+      </li>
+    );
+  }
 
   return (
     <li>
-      <Card className="flex flex-col gap-2">
-        <p className="text-meta font-ui text-ink-soft">{cohort?.name}</p>
-        <p className="text-body font-ui font-medium text-ink">
-          {formatSessionDay(session.date)} · {session.time} {session.timeZoneLabel}
-        </p>
-        <div className="flex flex-wrap gap-2">
-          {session.status === "past" && <LogStatus session={session} />}
-          {session.overlapsSessionIds.map((otherId) => {
-            const otherCohort = cohortsById.get(sessionsById.get(otherId)?.cohortId ?? "");
-            return (
-              <Badge key={otherId} variant="gentle">
-                {format(COPY.facilitator.schedule.overlaps_with, { cohortName: otherCohort?.name ?? "" })}
-              </Badge>
-            );
-          })}
-        </div>
-      </Card>
+      <Card className="flex flex-col gap-2">{rowContent}</Card>
     </li>
   );
 }

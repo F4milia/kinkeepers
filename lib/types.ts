@@ -153,6 +153,32 @@ export interface FacilitatorCertification {
   isExpiringSoon: boolean;
 }
 
+/**
+ * F3: one roster row on a facilitator's session-prep view. First name
+ * only, same convention CohortMember already uses everywhere else in
+ * this app. sessionsAttended is a real aggregate count (X4's
+ * session_attendance), never per-member free text.
+ */
+export interface SessionPrepRosterEntry {
+  applicantId: string;
+  firstName: string;
+  sessionsAttended: number;
+}
+
+/**
+ * F3: a session's material, certification-gated (get_session_prep_
+ * materials only returns rows to a currently-certified owning
+ * facilitator - an uncertified one gets a thrown error before this type
+ * is ever populated). No url field - no real Storage bucket exists yet
+ * (supabase/config.toml's storage block stays commented out), so this
+ * intentionally stops at the metadata the RPC exposes rather than
+ * inventing signed-URL infrastructure this session doesn't need to ship.
+ */
+export interface SessionPrepMaterial {
+  id: string;
+  title: string;
+}
+
 export interface Applicant {
   id: string;
   firstName: string;
