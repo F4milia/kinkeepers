@@ -5,7 +5,8 @@ import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireRole } from "@/lib/auth/roles";
 import { createRecurringMeeting, type CreatedMeeting } from "@/lib/zoom/meeting";
-import { getDefaultZoomCredentials, type ZoomCredentials } from "@/lib/zoom/client";
+import type { ZoomCredentials } from "@/lib/zoom/client";
+import { resolveZoomCredentialsForPartner } from "@/lib/zoom/credentials";
 import { generateSessionInstants } from "@/lib/admin/cohort-meeting-time";
 
 export interface CreateCohortInput {
@@ -101,6 +102,15 @@ export async function createCohortAction(
     program.session_count,
   );
 
+  // P3: "a cohort may carry its own Zoom credentials" - resolved from
+  // the cohort's partner, not skipped when a test passes its own
+  // zoomCredentials override (that override still wins outright, same
+  // as before this change; video_provider is just labeled 'kinkeepers'
+  // for that case since no test currently asserts on it).
+  const { credentials: resolvedCredentials, provider: videoProvider } = zoomCredentials
+    ? { credentials: zoomCredentials, provider: "kinkeepers" as const }
+    : await resolveZoomCredentialsForPartner(admin, input.partnerOrganizationId);
+
   let meeting: CreatedMeeting;
   try {
     meeting = await createRecurringMeeting(
@@ -112,7 +122,7 @@ export async function createCohortAction(
         sessionCount: program.session_count,
         repeatIntervalWeeks: input.cadence === "biweekly" ? 2 : 1,
       },
-      zoomCredentials ?? getDefaultZoomCredentials(),
+      resolvedCredentials,
       zoomFetchImpl ?? fetch,
     );
   } catch (error) {
@@ -144,6 +154,7 @@ export async function createCohortAction(
     // mis-assigning ids to the wrong sessions.
     video_occurrence_ids:
       meeting.occurrenceIds.length === sessionInstants.length ? meeting.occurrenceIds : undefined,
+    p_video_provider: videoProvider,
   });
 
   if (finalizeError) {
