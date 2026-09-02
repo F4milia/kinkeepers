@@ -4,7 +4,7 @@
 -- cohorts and sessions.
 
 begin;
-select plan(16);
+select plan(17);
 
 insert into programs (id, name, developer, session_count, session_duration_minutes, delivery_formats, languages, facilitator_qualification, license_status) values
   ('99999999-0000-0000-0000-00000000c001', 'pgTAP A3 Licensed', 'Test Developer', 6, 90, array['video'], array['English'], 'Lay leader', 'licensed'),
@@ -14,13 +14,23 @@ insert into auth.users (id, email) values
   ('66666666-0000-0000-0000-00000000a001', 'a3-admin@example.com'),
   ('66666666-0000-0000-0000-00000000a002', 'a3-facilitator-a@example.com'),
   ('66666666-0000-0000-0000-00000000a003', 'a3-facilitator-b@example.com'),
-  ('66666666-0000-0000-0000-00000000a004', 'a3-member@example.com');
+  ('66666666-0000-0000-0000-00000000a004', 'a3-member@example.com'),
+  ('66666666-0000-0000-0000-00000000a005', 'a3-facilitator-c@example.com');
 
 update profiles set role = 'admin' where id = '66666666-0000-0000-0000-00000000a001';
 update profiles set role = 'facilitator' where id = '66666666-0000-0000-0000-00000000a002';
 update profiles set role = 'facilitator' where id = '66666666-0000-0000-0000-00000000a003';
+update profiles set role = 'facilitator' where id = '66666666-0000-0000-0000-00000000a005';
 -- a004 stays 'member' (the default) - used as a non-facilitator for the
 -- negative role-check assertions below.
+-- a005 (X5b): a facilitator who is never this cohort's own facilitator
+-- and never substituted onto any of its sessions - a genuinely
+-- unrelated facilitator, distinct from a003 (which starts unrelated to
+-- the COHORT but is later made a session-level substitute, so it can't
+-- also prove the session-level facilitator boundary). The existing
+-- "unrelated member cannot read the session" assertion below proves
+-- role matters; this one proves being the WRONG facilitator specifically
+-- isn't enough either.
 
 -- program licensing trigger
 select throws_ok(
@@ -163,6 +173,18 @@ select is(
 );
 reset role;
 
+-- X5b: a facilitator who is neither this cohort's own facilitator nor
+-- ever substituted onto this session is denied too - being a
+-- facilitator at all isn't sufficient, only being the RIGHT one is.
+set local role authenticated;
+set local request.jwt.claims to '{"sub": "66666666-0000-0000-0000-00000000a005", "role": "authenticated"}';
+select is(
+  (select count(*)::int from sessions where id = '55555555-0000-0000-0000-00000000c001'),
+  0,
+  'an unrelated facilitator (not the cohort''s own, never substituted) cannot read the session'
+);
+reset role;
+
 select throws_ok(
   $$ insert into sessions (cohort_id, session_number, scheduled_at)
      values ('77777777-0000-0000-0000-00000000c001', 1, now()) $$,
@@ -183,3 +205,10 @@ rollback;
 --   Same drill repeated for "sessions_select_own_facilitator": dropped
 --   it, both facilitator-read assertions on the session failed
 --   ("have: 0, want: 1"), restored it, all passed again.
+--
+-- X5b: confirmed the new a005 assertion is a real negative, not a
+-- vacuous one - temporarily changed its expected count from 0 to 1
+-- (what it would read if the policy wrongly let any facilitator
+-- through), re-ran: failed with "have: 0, want: 1" as expected, proving
+-- a005 genuinely can't see the row today. Restored the correct
+-- expectation, all 17 passed again.
