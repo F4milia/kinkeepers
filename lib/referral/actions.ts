@@ -4,6 +4,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireRole } from "@/lib/auth/roles";
 import { sendResumeEmail } from "@/lib/referral/send-resume-email";
+import { notifyApplicationReceived } from "@/lib/messaging/applicant-notifications";
+import { notifyBestEffort } from "@/lib/messaging/notify-best-effort";
 
 const MAX_PARTNER_REFERENCE_ID_LENGTH = 64;
 
@@ -197,6 +199,14 @@ export async function completeIntake(resumeToken: string): Promise<CompleteIntak
   if (error || !data) {
     return { success: false, reason: "not_found" };
   }
+
+  // X3 message 1/7. Best-effort: a notification failure here must not
+  // block intake completion, the same reasoning P4 already established
+  // for reschedule/cancel notifications.
+  await notifyBestEffort(
+    () => notifyApplicationReceived(admin, data.id),
+    { applicant_id: data.id },
+  );
 
   return { success: true };
 }
