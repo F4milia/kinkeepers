@@ -26,6 +26,26 @@ URL actually shows.
 | L5 Demo Cohort | Real cohort with one real scheduled session (video, real join URL) - the only cohort with a session an applicant is actually assigned to | `99999999-0000-0000-0000-000000000501` |
 | "Spouses, Early Stage" / "Adult Children, Middle Stage" | Two open A2-era cohorts with different capacity/cadence/zone, for the assignment picker's composition view | `99999999-0000-0000-0000-000000000001` / `...002` |
 | Four consent documents (v1) | Terms/privacy/participant/group-confidentiality, all placeholder text pending Ivan's attorney-reviewed versions | `consent_documents` |
+| Renata Solis | Real, sign-in-able facilitator account (the first of its kind in this file - see "Signing in as a fixture" below) with three certifications covering all three badge states: current, expiring within 60 days, and expired | `auth.users.id = 66666666-0000-0000-0000-0000000f2601`, email `renata.solis@example.com` |
+
+## Signing in as a fixture
+
+Only Renata Solis (above) is a real account today - every other fixture is
+plain data with no login capability. `seed.sql` can't call Supabase's
+Admin API (it's pure SQL run via `supabase db reset`), so this account is
+seeded by inserting directly into `auth.users`/`auth.identities` with the
+columns a real magic-link sign-in needs - verified end-to-end before
+adding it: a real OTP email arrived and redeeming its link returned a
+genuine session for this exact row.
+
+To sign in as Renata locally: go to `/sign-in`, enter
+`renata.solis@example.com`, then open Mailpit
+(`http://127.0.0.1:54364` by default - check `supabase status`'s
+`MAILPIT_URL` if that's changed) and click the link in the "Your sign-in
+link" email. No real inbox involved locally. On a preview deploy, this
+depends on real Resend delivery and `STAGING_MESSAGE_ALLOWLIST` - see the
+"Real blocker" section below before assuming this works the same way
+there.
 
 ## Known gap
 

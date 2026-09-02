@@ -187,3 +187,59 @@ insert into consent_documents (document_type, version, body, is_placeholder) val
   ('privacy_policy', 1, '[PLACEHOLDER - Privacy Policy v1. Attorney-reviewed text pending. Do not treat as real.]', true),
   ('participant_agreement', 1, '[PLACEHOLDER - Participant Agreement v1. Attorney-reviewed text pending. Do not treat as real.]', true),
   ('group_confidentiality', 1, '[PLACEHOLDER - Group Confidentiality Agreement v1. Attorney-reviewed text pending. Do not treat as real. Members agree not to share what others say outside the group.]', true);
+
+-- F2 QA fixture: a real, sign-in-able facilitator account, so a human
+-- tester can actually reach /facilitator/certifications instead of the
+-- surface having no seeded way to sign in at all - every prior facilitator
+-- reference in this file (F1's own screens) had this same gap, since
+-- accounts were previously assumed to only ever come from real sign-in.
+-- A plain application-level INSERT can't create a working GoTrue account
+-- (no admin API access from inside seed.sql, which is pure SQL run via
+-- `supabase db reset`) - this inserts directly into auth.users/
+-- auth.identities instead, matching the columns a real signInWithOtp +
+-- magic-link redemption needs. Verified end-to-end before adding this:
+-- a real OTP email arrived in Mailpit and redeeming its link returned a
+-- genuine access_token for this exact row, not just an id that satisfies
+-- a foreign key the way pgTAP's own auth.users stub rows do.
+insert into auth.users (
+  instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
+  raw_app_meta_data, raw_user_meta_data, created_at, updated_at, confirmation_token,
+  recovery_token, email_change_token_new, email_change
+) values (
+  '00000000-0000-0000-0000-000000000000',
+  '66666666-0000-0000-0000-0000000f2601',
+  'authenticated', 'authenticated', 'renata.solis@example.com', '', now(),
+  '{"provider":"email","providers":["email"]}', '{}', now(), now(), '', '', '', ''
+);
+
+insert into auth.identities (id, user_id, provider_id, identity_data, provider, last_sign_in_at, created_at, updated_at) values (
+  gen_random_uuid(), '66666666-0000-0000-0000-0000000f2601', '66666666-0000-0000-0000-0000000f2601',
+  '{"sub":"66666666-0000-0000-0000-0000000f2601","email":"renata.solis@example.com","email_verified":true,"phone_verified":false}',
+  'email', now(), now(), now()
+);
+
+update profiles set role = 'facilitator' where id = '66666666-0000-0000-0000-0000000f2601';
+
+-- Certified against Tele-Savvy (in_negotiation, not licensed) -
+-- facilitator_certifications has no license_status requirement of its
+-- own (only cohort assignment does, via enforce_cohort_program_and_
+-- facilitator), so this doesn't need this seed's "zero licensed
+-- programs" state to change. Three rows exercise all three badge states
+-- the certifications screen renders: current, expiring within 60 days,
+-- and expired.
+insert into facilitator_certifications (id, facilitator_id, program_id, certified_on, expires_on, certifying_body) values
+  (
+    '33333333-0000-0000-0000-0000000f2601', '66666666-0000-0000-0000-0000000f2601',
+    (select id from programs where name = 'Tele-Savvy'),
+    current_date - 300, current_date + 200, 'BPC National Training Center'
+  ),
+  (
+    '33333333-0000-0000-0000-0000000f2602', '66666666-0000-0000-0000-0000000f2601',
+    (select id from programs where name = 'Tele-Savvy'),
+    current_date - 340, current_date + 30, 'BPC National Training Center'
+  ),
+  (
+    '33333333-0000-0000-0000-0000000f2603', '66666666-0000-0000-0000-0000000f2601',
+    (select id from programs where name = 'Tele-Savvy'),
+    current_date - 400, current_date - 5, 'BPC National Training Center'
+  );

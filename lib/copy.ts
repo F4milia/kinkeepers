@@ -143,6 +143,7 @@ export const COPY = {
     nav: {
       home: "Home",
       schedule: "Schedule",
+      certifications: "Certifications",
     },
     home: {
       // L5: no facilitator display name exists anywhere in the schema
@@ -169,6 +170,16 @@ export const COPY = {
       not_logged_many: "Not logged — {n} days overdue",
       overlaps_with: "Overlaps with {cohortName}",
       empty: "No sessions scheduled yet.",
+    },
+    // F2: status words reused verbatim from the admin certification
+    // screens (A4-cert) - same concept, same product, not new copy being
+    // invented for this view.
+    certifications: {
+      title: "Certifications",
+      empty: "No certifications on record.",
+      expired: "Expired",
+      expiring_soon: "Expires soon",
+      current: "Current",
     },
   },
   /**

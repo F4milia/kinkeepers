@@ -7,11 +7,13 @@ import { COPY } from "@/lib/copy";
 const ITEMS = [
   { href: "/facilitator", label: COPY.facilitator.nav.home },
   { href: "/facilitator/schedule", label: COPY.facilitator.nav.schedule },
+  { href: "/facilitator/certifications", label: COPY.facilitator.nav.certifications },
 ];
 
-// Two destinations only — no third-tab equivalent to the caregiver
-// TabBar's Discussion here, so a simple top row rather than a bottom bar
-// (which this codebase reserves for the 3-destination caregiver nav).
+// F2 added a third destination (Certifications) - still a simple top row,
+// not the caregiver TabBar's bottom-bar treatment, which this codebase
+// reserves specifically for that 3-destination member nav, not just any
+// nav that happens to reach three items.
 export function FacilitatorNav() {
   const pathname = usePathname();
 
