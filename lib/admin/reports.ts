@@ -48,6 +48,134 @@ export async function getCohortDeliverySummary(callerClient?: SupabaseClient): P
   });
 }
 
+export interface UnloggedPastSession {
+  id: string;
+  cohortId: string;
+  cohortName: string;
+  sessionNumber: number;
+  scheduledAt: string;
+}
+
+/**
+ * A5: sessions whose scheduled time has passed with no session_logs row
+ * yet - the facilitator hasn't confirmed delivery/attendance for a
+ * session that already happened. Two-query-then-filter-in-JS, same
+ * pattern as getCohortDeliverySummary above (no reusable admin-reporting
+ * aggregate exists yet, and row counts are small at this project's
+ * scale). `sessions.status` never transitions to anything but
+ * 'scheduled'/'cancelled' anywhere in this codebase (confirmed by grep -
+ * nothing sets 'completed') - so "past" is determined by scheduled_at
+ * alone, not by status.
+ */
+export async function getUnloggedPastSessions(callerClient?: SupabaseClient): Promise<UnloggedPastSession[]> {
+  const supabase = callerClient ?? (await createClient());
+  await requireRole(["admin"], supabase);
+
+  const [{ data: sessions, error: sessionsError }, { data: logs, error: logsError }] = await Promise.all([
+    supabase
+      .from("sessions")
+      .select("id, cohort_id, session_number, scheduled_at, cohorts(name)")
+      .eq("status", "scheduled")
+      .lt("scheduled_at", new Date().toISOString()),
+    supabase.from("session_logs").select("session_id"),
+  ]);
+  if (sessionsError) throw sessionsError;
+  if (logsError) throw logsError;
+
+  const loggedSessionIds = new Set(logs.map((log) => log.session_id));
+
+  return sessions
+    .filter((session) => !loggedSessionIds.has(session.id))
+    .map((session) => ({
+      id: session.id,
+      cohortId: session.cohort_id,
+      cohortName: (session.cohorts as unknown as { name: string } | null)?.name ?? "Unknown cohort",
+      sessionNumber: session.session_number,
+      scheduledAt: session.scheduled_at,
+    }))
+    .sort((a, b) => new Date(a.scheduledAt).getTime() - new Date(b.scheduledAt).getTime());
+}
+
+export interface ConsecutiveAbsenceFlag {
+  applicantId: string;
+  firstName: string | null;
+  lastName: string | null;
+  cohortId: string;
+  cohortName: string;
+  missedSessionNumbers: [number, number];
+}
+
+/**
+ * A5: a member whose two most recently LOGGED sessions, back to back by
+ * session_number, were both marked 'absent' - CLAUDE.md invariant #5:
+ * "Absence counts only... surface signal, never decide," so this is a
+ * plain factual flag (two real consecutive misses), not a score. Excused
+ * absences don't count - only the bare 'absent' status. A gap (e.g.
+ * absent at session 3, present at 4, absent at 5) is deliberately NOT
+ * flagged - the two most recent logged session_numbers must differ by
+ * exactly 1, or it isn't "in a row."
+ */
+export async function getConsecutiveAbsenceFlags(callerClient?: SupabaseClient): Promise<ConsecutiveAbsenceFlag[]> {
+  const supabase = callerClient ?? (await createClient());
+  await requireRole(["admin"], supabase);
+
+  const [{ data: attendance, error: attendanceError }, { data: applicants, error: applicantsError }] =
+    await Promise.all([
+      supabase.from("session_attendance").select("applicant_id, status, sessions(session_number, cohort_id, cohorts(name))"),
+      supabase.from("applicants").select("id, first_name, last_name"),
+    ]);
+  if (attendanceError) throw attendanceError;
+  if (applicantsError) throw applicantsError;
+
+  const applicantById = new Map(applicants.map((applicant) => [applicant.id, applicant]));
+
+  const recordsByApplicant = new Map<
+    string,
+    { sessionNumber: number; status: string; cohortId: string; cohortName: string }[]
+  >();
+  for (const row of attendance) {
+    const session = row.sessions as unknown as {
+      session_number: number;
+      cohort_id: string;
+      cohorts: { name: string } | null;
+    } | null;
+    if (!session) continue;
+    const records = recordsByApplicant.get(row.applicant_id) ?? [];
+    records.push({
+      sessionNumber: session.session_number,
+      status: row.status,
+      cohortId: session.cohort_id,
+      cohortName: session.cohorts?.name ?? "Unknown cohort",
+    });
+    recordsByApplicant.set(row.applicant_id, records);
+  }
+
+  const flags: ConsecutiveAbsenceFlag[] = [];
+  for (const [applicantId, records] of recordsByApplicant) {
+    records.sort((a, b) => a.sessionNumber - b.sessionNumber);
+    const mostRecent = records[records.length - 1];
+    const secondMostRecent = records[records.length - 2];
+    if (
+      mostRecent &&
+      secondMostRecent &&
+      mostRecent.status === "absent" &&
+      secondMostRecent.status === "absent" &&
+      mostRecent.sessionNumber - secondMostRecent.sessionNumber === 1
+    ) {
+      const applicant = applicantById.get(applicantId);
+      flags.push({
+        applicantId,
+        firstName: applicant?.first_name ?? null,
+        lastName: applicant?.last_name ?? null,
+        cohortId: mostRecent.cohortId,
+        cohortName: mostRecent.cohortName,
+        missedSessionNumbers: [secondMostRecent.sessionNumber, mostRecent.sessionNumber],
+      });
+    }
+  }
+  return flags;
+}
+
 export interface PartnerReferralSummaryRow {
   id: string;
   // Opaque, partner-supplied - CLAUDE.md invariant #8: "echo only in the
