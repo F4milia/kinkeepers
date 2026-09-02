@@ -266,14 +266,16 @@ export const COPY = {
     },
   },
   /**
-   * L3, consent section only (notification preferences and account info
-   * deferred - see CLAUDE.md/session notes on the missing profiles<->
-   * applicants link). Document type names are plain factual labels, not
-   * invented copy - they name what the document already is. checkbox/
-   * agree/continue are functional verbs, same precedent as L1/L2. The
-   * group-confidentiality intro was confirmed with Ferenz first, since
-   * the prompt only described the tone it needed ("a commitment to the
-   * group, not a legal formality"), not literal text.
+   * L3, consent section (notification preferences and account info were
+   * deferred here on the missing profiles<->applicants link - see
+   * CLAUDE.md's Learned Constraints; both now live under COPY.account,
+   * built once L5 closed that gap). Document type names are plain
+   * factual labels, not invented copy - they name what the document
+   * already is. checkbox/agree/continue are functional verbs, same
+   * precedent as L1/L2. The group-confidentiality intro was confirmed
+   * with Ferenz first, since the prompt only described the tone it
+   * needed ("a commitment to the group, not a legal formality"), not
+   * literal text.
    */
   consent: {
     title: "Agreements",
@@ -290,6 +292,33 @@ export const COPY = {
     consented_on: "Agreed {date}",
     all_done: "You're up to date on your agreements.",
     discussion_line: "What's shared here stays here.",
+  },
+  /**
+   * L3 (remaining scope): notification preferences and account. Field
+   * labels (name/email/phone/time_zone, channel options) deliberately
+   * reuse COPY.referral.field's existing strings verbatim rather than
+   * drafting near-duplicates - this screen edits the same conceptual
+   * fields L2's intake form collected. notification_explain is drafted
+   * directly from the L3 prompt's own stated content requirement
+   * ("Explain plainly what each is used for — session reminders and
+   * program updates, nothing else. No marketing, and say so"), not
+   * separately confirmed with Ferenz - same low-risk plain-functional-
+   * copy treatment already given to F1/F3's structural labels, since the
+   * prompt itself dictates the content, not just the intent. request_
+   * confirmation quotes the prompt's own template with the day count
+   * Ferenz chose directly (matching COPY.referral.confirmation.body's
+   * "three business days" precedent).
+   */
+  account: {
+    title: "Account",
+    save: "Save",
+    saved: "Saved",
+    notification_preferences_title: "Notification preferences",
+    notification_preferences_explain: "Used only for session reminders and program updates. No marketing.",
+    sign_out: "Sign out",
+    request_export: "Request a copy of my information",
+    request_deletion: "Delete my account",
+    request_confirmation: "We received your request and will respond within three business days.",
   },
   /**
    * L5 (API integration and error states). network.headline/body is

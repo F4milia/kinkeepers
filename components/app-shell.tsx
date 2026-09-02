@@ -1,7 +1,9 @@
 import type { ReactNode } from "react";
+import Link from "next/link";
 import { TabBar } from "@/components/ui/tab-bar";
 import { SupportAffordance } from "@/components/support-affordance";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { COPY } from "@/lib/copy";
 import type { Theme } from "@/lib/theme";
 
 /**
@@ -28,6 +30,15 @@ export function AppShell({ children, theme }: { children: ReactNode; theme: Them
             it. Wraps rather than shrinks at 320px: both stay 48px targets. */}
         <header className="sticky top-0 z-30 border-b border-line bg-canvas">
           <div className="mx-auto flex max-w-content flex-wrap items-center justify-end gap-2 px-4 py-2">
+            {/* L3: reachable from every screen, same "not a fourth tab-bar
+                destination" treatment as ThemeToggle/SupportAffordance -
+                Account is a settings destination, not a primary one. */}
+            <Link
+              href="/account"
+              className="inline-flex min-h-12 items-center justify-center rounded-control px-3 text-label font-ui text-ink-soft transition-colors hover:bg-action-dim hover:text-ink"
+            >
+              {COPY.account.title}
+            </Link>
             <ThemeToggle initialTheme={theme} />
             <SupportAffordance />
           </div>
