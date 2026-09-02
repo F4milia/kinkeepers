@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { JoinAction } from "@/components/session/join-action";
 import { DeliveryBadge } from "@/components/session/delivery-badge";
+import { DialInDetails } from "@/components/session/dial-in-details";
 import { COPY, format } from "@/lib/copy";
 import { formatSessionDay, formatSessionTimeRange } from "@/lib/format-date";
 import type { Session } from "@/lib/types";
@@ -117,6 +118,7 @@ export function SessionDetail({ session }: SessionDetailProps) {
         ) : (
           <div className="flex flex-col items-center gap-3">
             <JoinAction session={session} className="w-full" />
+            <DialInDetails dialInNumber={session.dialInNumber} dialInPin={session.dialInPin} />
             <Button variant="quiet" onClick={() => setMarkedAbsent(true)}>
               {COPY.session.mark_absent}
             </Button>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { AttendanceRadioGroup, type AttendanceStatus } from "@/components/ui/attendance-radio-group";
 import { Avatar } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -10,6 +10,8 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { TextArea } from "@/components/ui/text-area";
 import { COPY, format } from "@/lib/copy";
 import { formatLongDate, formatSessionDay } from "@/lib/format-date";
+import { submitSessionLogAction } from "@/lib/facilitator/session-log";
+import { getSessionAttendancePreFillAction, type UnidentifiedCaller } from "@/lib/facilitator/attendance-prefill";
 import type { CohortMember, Session } from "@/lib/types";
 
 const STATUS_LABEL: Record<AttendanceStatus, string> = {
@@ -76,7 +78,46 @@ export function FacilitatorSessionLog({ session, members, facilitatorName }: Fac
     session.loggedBy && session.loggedDate ? { by: session.loggedBy, date: session.loggedDate } : null,
   );
   const [edits, setEdits] = useState<EditEntry[]>([]);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
+  const [unidentifiedCallers, setUnidentifiedCallers] = useState<UnidentifiedCaller[]>([]);
+  const [attributions, setAttributions] = useState<Record<string, string>>({});
   const hydrated = useRef(false);
+
+  // Pre-fill from Zoom (X4/P3) - only before a real log exists for this
+  // session. Once submitted, the confirmed record takes precedence; a
+  // late-arriving Zoom suggestion should never second-guess it. Never
+  // auto-commits anything - this only seeds the same form state a
+  // facilitator can still change before submitting (CLAUDE.md invariant
+  // #7).
+  useEffect(() => {
+    if (submission) return;
+    let cancelled = false;
+
+    getSessionAttendancePreFillAction(session.id).then((result) => {
+      if (cancelled || !result.available) return;
+      setAttendance((current) => {
+        const next = { ...current };
+        for (const suggestion of result.suggestions) {
+          if (next[suggestion.applicantId] === "unmarked") next[suggestion.applicantId] = "present";
+        }
+        return next;
+      });
+      setUnidentifiedCallers(result.unidentifiedCallers);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session.id]);
+
+  function attributeCaller(participantId: string, applicantId: string) {
+    setAttributions((current) => ({ ...current, [participantId]: applicantId }));
+    if (applicantId) {
+      setAttendance((current) => ({ ...current, [applicantId]: "present" }));
+    }
+  }
 
   // Facilitator log carries unsaved attendance marks and notes across a
   // reload or a closed tab, the same way the discussion composer does —
@@ -116,31 +157,52 @@ export function FacilitatorSessionLog({ session, members, facilitatorName }: Fac
   const unmarkedCount = roster.filter((member) => attendance[member.id] === "unmarked").length;
 
   function handleConfirmSubmit() {
-    const by = facilitatorName;
-    const date = todayISO();
+    setSubmitError(null);
 
-    if (submission) {
-      const changes: EditChange[] = [];
-      roster.forEach((member) => {
-        if (attendance[member.id] !== savedAttendance[member.id]) {
-          changes.push({ label: member.firstName, previousValue: STATUS_LABEL[savedAttendance[member.id]] });
+    // Facilitator-role roster rows have no applicant_id to persist
+    // attendance against, and "unmarked" means "no row," not a status to
+    // send - submit_session_log() treats a missing entry as unmarked on
+    // its own.
+    const attendanceEntries = roster
+      .filter((member) => member.role === "member" && attendance[member.id] !== "unmarked")
+      .map((member) => ({
+        applicantId: member.id,
+        status: attendance[member.id] as Exclude<AttendanceStatus, "unmarked">,
+      }));
+
+    startTransition(async () => {
+      const result = await submitSessionLogAction(session.id, deliveryConfirmed, notes, attendanceEntries);
+      if (!result.success) {
+        setSubmitError(result.error);
+        return;
+      }
+
+      const by = facilitatorName;
+      const date = todayISO();
+
+      if (submission) {
+        const changes: EditChange[] = [];
+        roster.forEach((member) => {
+          if (attendance[member.id] !== savedAttendance[member.id]) {
+            changes.push({ label: member.firstName, previousValue: STATUS_LABEL[savedAttendance[member.id]] });
+          }
+        });
+        if (notes !== savedNotes) {
+          changes.push({ label: COPY.log.notes, previousValue: savedNotes.trim() ? savedNotes : "—" });
         }
-      });
-      if (notes !== savedNotes) {
-        changes.push({ label: COPY.log.notes, previousValue: savedNotes.trim() ? savedNotes : "—" });
+        if (changes.length > 0) {
+          setEdits((current) => [...current, { by, date, changes }]);
+        }
+      } else {
+        setSubmission({ by, date });
       }
-      if (changes.length > 0) {
-        setEdits((current) => [...current, { by, date, changes }]);
-      }
-    } else {
-      setSubmission({ by, date });
-    }
 
-    setSavedAttendance(attendance);
-    setSavedNotes(notes);
-    setSavedDeliveryConfirmed(deliveryConfirmed);
-    setConfirmOpen(false);
-    window.localStorage.removeItem(draftKey);
+      setSavedAttendance(attendance);
+      setSavedNotes(notes);
+      setSavedDeliveryConfirmed(deliveryConfirmed);
+      setConfirmOpen(false);
+      window.localStorage.removeItem(draftKey);
+    });
   }
 
   return (
@@ -200,6 +262,40 @@ export function FacilitatorSessionLog({ session, members, facilitatorName }: Fac
         </ul>
       </section>
 
+      {unidentifiedCallers.length > 0 && (
+        <section className="flex flex-col gap-3">
+          <ul className="flex flex-col gap-3">
+            {unidentifiedCallers.map((caller) => (
+              <li
+                key={caller.participantId}
+                className="flex flex-col gap-2 rounded-control border border-line bg-surface p-4"
+              >
+                <p className="text-body font-ui text-ink">
+                  {format(COPY.log.unidentified_caller, { last4: caller.last4 })}
+                </p>
+                <label className="flex flex-col gap-1">
+                  <span className="text-meta font-ui text-ink-soft">{COPY.log.attribute_label}</span>
+                  <select
+                    className="min-h-12 w-full rounded-control border border-line bg-surface px-4 text-body font-ui text-ink"
+                    value={attributions[caller.participantId] ?? ""}
+                    onChange={(event) => attributeCaller(caller.participantId, event.target.value)}
+                  >
+                    <option value="">{COPY.log.attribute_unassigned}</option>
+                    {roster
+                      .filter((member) => member.role === "member")
+                      .map((member) => (
+                        <option key={member.id} value={member.id}>
+                          {member.firstName}
+                        </option>
+                      ))}
+                  </select>
+                </label>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
       <TextArea
         label={COPY.log.notes}
         placeholder={COPY.log.notes_placeholder}
@@ -208,7 +304,19 @@ export function FacilitatorSessionLog({ session, members, facilitatorName }: Fac
         maxLength={2000}
       />
 
-      <Button variant="primary" className="w-full" disabled={!deliveryConfirmed} onClick={() => setConfirmOpen(true)}>
+      {submitError ? (
+        <p className="text-body font-ui text-ink" role="alert">
+          {COPY.errors.server.body} {format(COPY.errors.call_for_help, { phoneNumber: COPY.support.phoneNumber })}
+        </p>
+      ) : null}
+
+      <Button
+        variant="primary"
+        className="w-full"
+        disabled={!deliveryConfirmed}
+        loading={pending}
+        onClick={() => setConfirmOpen(true)}
+      >
         {COPY.log.submit}
       </Button>
 

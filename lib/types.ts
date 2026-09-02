@@ -81,6 +81,15 @@ export interface Session {
    * Video calling is a link out, never built in (Part 5.3).
    */
   joinUrl: string | null;
+  /**
+   * X4: "surface the dial-in number and PIN in the member UI everywhere
+   * the video join link appears, not buried behind a disclosure" - a
+   * member who can't get video working needs the phone option visible
+   * in that moment, not one tap away. Null under the same conditions as
+   * joinUrl (a past session, or the facilitator hasn't shared it yet).
+   */
+  dialInNumber: string | null;
+  dialInPin: string | null;
   materialsCount: number;
   /** Set on upcoming sessions; attendance isn't final yet. */
   attendingCount?: number;

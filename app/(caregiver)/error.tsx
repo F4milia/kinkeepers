@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Card } from "@/components/ui/card";
 import { ErrorState } from "@/components/ui/error-state";
 import { DeliveryBadge } from "@/components/session/delivery-badge";
+import { DialInDetails } from "@/components/session/dial-in-details";
 import { JoinAction } from "@/components/session/join-action";
 import { COPY, format } from "@/lib/copy";
 import { readNextSessionCache, type CachedNextSession } from "@/components/session/next-session-cache";
@@ -54,10 +55,13 @@ export default function CaregiverError({ reset }: { error: Error & { digest?: st
               deliveryFormat: cached.deliveryFormat,
               topic: null,
               joinUrl: cached.joinUrl,
+              dialInNumber: cached.dialInNumber,
+              dialInPin: cached.dialInPin,
               materialsCount: 0,
             }}
             className="w-full"
           />
+          <DialInDetails dialInNumber={cached.dialInNumber} dialInPin={cached.dialInPin} />
           <p className="text-meta font-ui text-ink-soft">
             {format(COPY.home.progress, { n: cached.sessionNumber, total: cached.sessionTotal })}
           </p>
