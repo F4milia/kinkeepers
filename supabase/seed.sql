@@ -207,18 +207,18 @@ insert into auth.users (
   recovery_token, email_change_token_new, email_change
 ) values (
   '00000000-0000-0000-0000-000000000000',
-  '66666666-0000-0000-0000-000000000601',
+  '66666666-0000-0000-0000-0000000f2601',
   'authenticated', 'authenticated', 'renata.solis@example.com', '', now(),
   '{"provider":"email","providers":["email"]}', '{}', now(), now(), '', '', '', ''
 );
 
 insert into auth.identities (id, user_id, provider_id, identity_data, provider, last_sign_in_at, created_at, updated_at) values (
-  gen_random_uuid(), '66666666-0000-0000-0000-000000000601', '66666666-0000-0000-0000-000000000601',
-  '{"sub":"66666666-0000-0000-0000-000000000601","email":"renata.solis@example.com","email_verified":true,"phone_verified":false}',
+  gen_random_uuid(), '66666666-0000-0000-0000-0000000f2601', '66666666-0000-0000-0000-0000000f2601',
+  '{"sub":"66666666-0000-0000-0000-0000000f2601","email":"renata.solis@example.com","email_verified":true,"phone_verified":false}',
   'email', now(), now(), now()
 );
 
-update profiles set role = 'facilitator' where id = '66666666-0000-0000-0000-000000000601';
+update profiles set role = 'facilitator' where id = '66666666-0000-0000-0000-0000000f2601';
 
 -- Certified against Tele-Savvy (in_negotiation, not licensed) -
 -- facilitator_certifications has no license_status requirement of its
@@ -229,17 +229,17 @@ update profiles set role = 'facilitator' where id = '66666666-0000-0000-0000-000
 -- and expired.
 insert into facilitator_certifications (id, facilitator_id, program_id, certified_on, expires_on, certifying_body) values
   (
-    '33333333-0000-0000-0000-000000000601', '66666666-0000-0000-0000-000000000601',
+    '33333333-0000-0000-0000-0000000f2601', '66666666-0000-0000-0000-0000000f2601',
     (select id from programs where name = 'Tele-Savvy'),
     current_date - 300, current_date + 200, 'BPC National Training Center'
   ),
   (
-    '33333333-0000-0000-0000-000000000602', '66666666-0000-0000-0000-000000000601',
+    '33333333-0000-0000-0000-0000000f2602', '66666666-0000-0000-0000-0000000f2601',
     (select id from programs where name = 'Tele-Savvy'),
     current_date - 340, current_date + 30, 'BPC National Training Center'
   ),
   (
-    '33333333-0000-0000-0000-000000000603', '66666666-0000-0000-0000-000000000601',
+    '33333333-0000-0000-0000-0000000f2603', '66666666-0000-0000-0000-0000000f2601',
     (select id from programs where name = 'Tele-Savvy'),
     current_date - 400, current_date - 5, 'BPC National Training Center'
   );

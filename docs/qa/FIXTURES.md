@@ -26,7 +26,7 @@ URL actually shows.
 | L5 Demo Cohort | Real cohort with one real scheduled session (video, real join URL) - the only cohort with a session an applicant is actually assigned to | `99999999-0000-0000-0000-000000000501` |
 | "Spouses, Early Stage" / "Adult Children, Middle Stage" | Two open A2-era cohorts with different capacity/cadence/zone, for the assignment picker's composition view | `99999999-0000-0000-0000-000000000001` / `...002` |
 | Four consent documents (v1) | Terms/privacy/participant/group-confidentiality, all placeholder text pending Ivan's attorney-reviewed versions | `consent_documents` |
-| Renata Solis | Real, sign-in-able facilitator account (the first of its kind in this file - see "Signing in as a fixture" below) with three certifications covering all three badge states: current, expiring within 60 days, and expired | `auth.users.id = 66666666-0000-0000-0000-000000000601`, email `renata.solis@example.com` |
+| Renata Solis | Real, sign-in-able facilitator account (the first of its kind in this file - see "Signing in as a fixture" below) with three certifications covering all three badge states: current, expiring within 60 days, and expired | `auth.users.id = 66666666-0000-0000-0000-0000000f2601`, email `renata.solis@example.com` |
 
 ## Signing in as a fixture
 
