@@ -17,11 +17,19 @@ const STAGE_OPTIONS = [
   { value: "unsure", label: COPY.referral.field.stage_unsure },
 ];
 
+// `value` must be a real IANA identifier - it's stored verbatim as
+// applicants.time_zone (lib/referral/actions.ts) with no transformation,
+// and every consumer (lib/admin/cohort-meeting-time.ts,
+// lib/session-time.ts) feeds it straight into Intl.DateTimeFormat, which
+// throws RangeError on a friendly-only string like "Eastern". Matches
+// the same four US regions and IANA zones lib/session-time.ts's
+// FRIENDLY_ZONE_LABELS already maps back from - keep both in sync if a
+// region is ever added here.
 const TIME_ZONE_OPTIONS = [
-  { value: "Eastern", label: "Eastern" },
-  { value: "Central", label: "Central" },
-  { value: "Mountain", label: "Mountain" },
-  { value: "Pacific", label: "Pacific" },
+  { value: "America/New_York", label: "Eastern" },
+  { value: "America/Chicago", label: "Central" },
+  { value: "America/Denver", label: "Mountain" },
+  { value: "America/Los_Angeles", label: "Pacific" },
 ];
 
 const CONTACT_OPTIONS = [
