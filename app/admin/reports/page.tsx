@@ -8,6 +8,7 @@ import {
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
+import { buttonClasses } from "@/components/ui/button";
 
 // Admin-only oversight list, not a member-facing screen - shown as a
 // real instant with an explicit zone name rather than lib/format-date.ts's
@@ -45,6 +46,10 @@ export default async function AdminReportsPage() {
       <div className="max-w-3xl">
         <h1 className="text-h1 font-heading text-ink">Reports</h1>
         <p className="mt-2 text-body font-ui text-ink-soft">Your organization&apos;s referrals and their status.</p>
+
+        <a href="/admin/reports/export" className={`${buttonClasses("secondary")} mt-4 inline-flex w-fit`}>
+          Export attendance and delivery (CSV)
+        </a>
 
         {referrals.length === 0 ? (
           <div className="mt-6">

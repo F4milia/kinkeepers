@@ -215,3 +215,74 @@ export async function getPartnerReferralSummary(
     cohortName: (row.cohorts as unknown as { name: string } | null)?.name ?? null,
   }));
 }
+
+export interface PartnerAttendanceExportRow {
+  applicantId: string;
+  firstName: string | null;
+  lastName: string | null;
+  partnerReferenceId: string | null;
+  cohortName: string | null;
+  status: string;
+  sessionNumber: number | null;
+  attendanceStatus: string | null;
+}
+
+/**
+ * A5's "Export attendance and delivery (CSV)" - one row per (applicant,
+ * logged session), or one row with null session/attendance fields for an
+ * applicant with no logged session yet (referral/enrollment status is
+ * still real delivery evidence a partner wants to see). Uses the
+ * caller's OWN RLS-respecting client, same as getPartnerReferralSummary
+ * above: applicants_select_own_partner_org_or_admin already scopes the
+ * applicant query, and the new session_attendance_select_own_partner_referrals
+ * policy (20260903110000) scopes the attendance query the same way - no
+ * manual org filter needed in JS on either query.
+ */
+export async function getPartnerAttendanceExportRows(
+  callerClient?: SupabaseClient,
+): Promise<PartnerAttendanceExportRow[]> {
+  const supabase = callerClient ?? (await createClient());
+  await requireRole(["partner_staff"], supabase);
+
+  const [{ data: applicants, error: applicantsError }, { data: attendance, error: attendanceError }] =
+    await Promise.all([
+      supabase
+        .from("applicants")
+        .select("id, first_name, last_name, partner_reference_id, status, cohorts(name)")
+        .order("created_at", { ascending: false }),
+      supabase.from("session_attendance").select("applicant_id, status, sessions(session_number)"),
+    ]);
+  if (applicantsError) throw applicantsError;
+  if (attendanceError) throw attendanceError;
+
+  const recordsByApplicant = new Map<string, { sessionNumber: number; status: string }[]>();
+  for (const row of attendance) {
+    const session = row.sessions as unknown as { session_number: number } | null;
+    if (!session) continue;
+    const records = recordsByApplicant.get(row.applicant_id) ?? [];
+    records.push({ sessionNumber: session.session_number, status: row.status });
+    recordsByApplicant.set(row.applicant_id, records);
+  }
+
+  const rows: PartnerAttendanceExportRow[] = [];
+  for (const applicant of applicants) {
+    const cohortName = (applicant.cohorts as unknown as { name: string } | null)?.name ?? null;
+    const records = (recordsByApplicant.get(applicant.id) ?? []).sort((a, b) => a.sessionNumber - b.sessionNumber);
+    const base = {
+      applicantId: applicant.id,
+      firstName: applicant.first_name,
+      lastName: applicant.last_name,
+      partnerReferenceId: applicant.partner_reference_id,
+      cohortName,
+      status: applicant.status,
+    };
+    if (records.length === 0) {
+      rows.push({ ...base, sessionNumber: null, attendanceStatus: null });
+    } else {
+      for (const record of records) {
+        rows.push({ ...base, sessionNumber: record.sessionNumber, attendanceStatus: record.status });
+      }
+    }
+  }
+  return rows;
+}
