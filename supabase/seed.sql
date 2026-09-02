@@ -279,12 +279,49 @@ insert into cohorts (id, name, grouping_description, capacity, cadence, meeting_
     8, 'weekly', 2, '18:30', 'America/New_York', '66666666-0000-0000-0000-0000000f2601', 'active'
   );
 
-insert into applicants (id, partner_organization_id, referral_source, first_name, last_name, status, cohort_id) values
+-- email is set to a real, sign-in-able address (see the L3 QA fixture
+-- block below) rather than left null like most seed applicants - a
+-- member screen (L3's /account) needs a real human to actually sign in
+-- as, not just data to render around a facilitator's own view.
+insert into applicants (id, partner_organization_id, referral_source, first_name, last_name, email, status, cohort_id) values
   (
     '88888888-0000-0000-0000-0000000f2601',
     (select id from partner_organizations where name = 'Riverside Health Network'),
-    'partner_link', 'Jamie', 'Ellis', 'enrolled', '99999999-0000-0000-0000-0000000f2601'
+    'partner_link', 'Jamie', 'Ellis', 'ferenz+kinkeepers-member@brandlamb.com', 'enrolled', '99999999-0000-0000-0000-0000000f2601'
   );
 
 insert into sessions (id, cohort_id, session_number, scheduled_at) values
   ('55555555-0000-0000-0000-0000000f2601', '99999999-0000-0000-0000-0000000f2601', 1, now() + interval '7 days');
+
+-- L3 QA fixture: a real, sign-in-able MEMBER account for Jamie Ellis
+-- (above) - same pattern and same reasoning as Renata Solis's facilitator
+-- account further up this file (real auth.users/auth.identities rows,
+-- since seed.sql has no Admin API access to create one properly), needed
+-- because /account (this session's own screen) has no seeded way to
+-- reach it as a caregiver otherwise. Deliberately left unclaimed
+-- (applicants.profile_id stays null) rather than pre-linked - signing in
+-- exercises the real claim_applicant_for_current_user() match-by-email
+-- flow (L5) live, the same way an actual member's first sign-in would,
+-- rather than skipping it.
+--
+-- A distinct plus-addressed variant of Ferenz's own address (not
+-- Renata's ferenz+kinkeepers@brandlamb.com) - auth.users.email is
+-- uniquely constrained, so this fixture needs its own address, and reusing
+-- Renata's would also break her own claim match (email is matched
+-- exact-string, not per-role).
+insert into auth.users (
+  instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
+  raw_app_meta_data, raw_user_meta_data, created_at, updated_at, confirmation_token,
+  recovery_token, email_change_token_new, email_change
+) values (
+  '00000000-0000-0000-0000-000000000000',
+  '66666666-0000-0000-0000-0000000f3601',
+  'authenticated', 'authenticated', 'ferenz+kinkeepers-member@brandlamb.com', '', now(),
+  '{"provider":"email","providers":["email"]}', '{}', now(), now(), '', '', '', ''
+);
+
+insert into auth.identities (id, user_id, provider_id, identity_data, provider, last_sign_in_at, created_at, updated_at) values (
+  gen_random_uuid(), '66666666-0000-0000-0000-0000000f3601', '66666666-0000-0000-0000-0000000f3601',
+  '{"sub":"66666666-0000-0000-0000-0000000f3601","email":"ferenz+kinkeepers-member@brandlamb.com","email_verified":true,"phone_verified":false}',
+  'email', now(), now(), now()
+);
