@@ -201,6 +201,17 @@ insert into consent_documents (document_type, version, body, is_placeholder) val
 -- a real OTP email arrived in Mailpit and redeeming its link returned a
 -- genuine access_token for this exact row, not just an id that satisfies
 -- a foreign key the way pgTAP's own auth.users stub rows do.
+--
+-- The email is deliberately NOT the usual fictional @example.com pattern
+-- (555-01XX phone numbers elsewhere in this file follow that convention
+-- for the same reason: a demo fixture shouldn't be able to reach a real
+-- person). Local sign-in only ever routes through Mailpit regardless of
+-- domain deliverability, but F3's QA needed a real production
+-- click-through too, and Resend genuinely refuses to deliver to
+-- @example.com - confirmed live (attempted sign-in on
+-- kinkeepers.vercel.app, got "We couldn't send that"). Ferenz's own
+-- address, at his direct instruction, is the one real inbox this
+-- specific fixture can safely use.
 insert into auth.users (
   instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
   raw_app_meta_data, raw_user_meta_data, created_at, updated_at, confirmation_token,
@@ -208,13 +219,13 @@ insert into auth.users (
 ) values (
   '00000000-0000-0000-0000-000000000000',
   '66666666-0000-0000-0000-0000000f2601',
-  'authenticated', 'authenticated', 'renata.solis@example.com', '', now(),
+  'authenticated', 'authenticated', 'ferenz@brandlamb.com', '', now(),
   '{"provider":"email","providers":["email"]}', '{}', now(), now(), '', '', '', ''
 );
 
 insert into auth.identities (id, user_id, provider_id, identity_data, provider, last_sign_in_at, created_at, updated_at) values (
   gen_random_uuid(), '66666666-0000-0000-0000-0000000f2601', '66666666-0000-0000-0000-0000000f2601',
-  '{"sub":"66666666-0000-0000-0000-0000000f2601","email":"renata.solis@example.com","email_verified":true,"phone_verified":false}',
+  '{"sub":"66666666-0000-0000-0000-0000000f2601","email":"ferenz@brandlamb.com","email_verified":true,"phone_verified":false}',
   'email', now(), now(), now()
 );
 

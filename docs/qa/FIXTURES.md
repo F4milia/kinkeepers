@@ -26,7 +26,7 @@ URL actually shows.
 | L5 Demo Cohort | Real cohort with one real scheduled session (video, real join URL) - the only cohort with a session an applicant is actually assigned to | `99999999-0000-0000-0000-000000000501` |
 | "Spouses, Early Stage" / "Adult Children, Middle Stage" | Two open A2-era cohorts with different capacity/cadence/zone, for the assignment picker's composition view | `99999999-0000-0000-0000-000000000001` / `...002` |
 | Four consent documents (v1) | Terms/privacy/participant/group-confidentiality, all placeholder text pending Ivan's attorney-reviewed versions | `consent_documents` |
-| Renata Solis | Real, sign-in-able facilitator account (the first of its kind in this file - see "Signing in as a fixture" below) with three certifications covering all three badge states: current, expiring within 60 days, and expired | `auth.users.id = 66666666-0000-0000-0000-0000000f2601`, email `renata.solis@example.com` |
+| Renata Solis | Real, sign-in-able facilitator account (the first of its kind in this file - see "Signing in as a fixture" below) with three certifications covering all three badge states: current, expiring within 60 days, and expired | `auth.users.id = 66666666-0000-0000-0000-0000000f2601`, email `ferenz@brandlamb.com` (a real inbox, not the usual `@example.com` fictional pattern - see the seed comment for why) |
 | Renata's Cohort (F3 QA fixture) | A real cohort assigned to Renata, one enrolled member (Jamie Ellis), one upcoming session - `/facilitator/schedule` links it to F3's prep view. No `program_id` (every program in this seed stays unlicensed by design - see the X2 seed comment), so it can only demonstrate the roster half of prep live; materials/certification-gating need a real program and are verified by `supabase/tests/database/session_prep_materials.sql` and `lib/data.test.ts` instead, not a click-through | `99999999-0000-0000-0000-0000000f2601`, session `55555555-0000-0000-0000-0000000f2601` |
 
 ## Signing in as a fixture
@@ -40,13 +40,20 @@ adding it: a real OTP email arrived and redeeming its link returned a
 genuine session for this exact row.
 
 To sign in as Renata locally: go to `/sign-in`, enter
-`renata.solis@example.com`, then open Mailpit
+`ferenz@brandlamb.com`, then open Mailpit
 (`http://127.0.0.1:54364` by default - check `supabase status`'s
 `MAILPIT_URL` if that's changed) and click the link in the "Your sign-in
-link" email. No real inbox involved locally. On a preview deploy, this
-depends on real Resend delivery and `STAGING_MESSAGE_ALLOWLIST` - see the
-"Real blocker" section below before assuming this works the same way
-there.
+link" email. Local sign-in always routes through Mailpit regardless of
+the email's real deliverability, so this works the same way it would for
+any address. On production, the same email now actually delivers to
+Ferenz's real inbox - confirmed live (an earlier attempt using the usual
+`@example.com` fictional pattern failed there with "We couldn't send
+that," since Resend genuinely refuses to deliver to a non-existent
+domain; this fixture is the one exception to the fictional-address
+convention for exactly that reason). See the "Real blocker" section
+below for the broader caveat this doesn't resolve: production and
+preview still share the same database, this fixture's login just
+happens to also work there now.
 
 ## Known gap
 
