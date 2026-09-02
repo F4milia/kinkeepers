@@ -4,6 +4,29 @@ export function formatSessionDay(dateISO: string): string {
   return new Intl.DateTimeFormat("en-US", { weekday: "long", month: "long", day: "numeric" }).format(date);
 }
 
+/**
+ * Formats a full instant (a real sessions.scheduled_at timestamptz, not a
+ * bare fixture date) with an explicit zone name - for admin-only oversight
+ * screens (A5's /admin/reports), not a member-facing one.
+ *
+ * Explicit date/time component options, NOT dateStyle/timeStyle - Intl's
+ * own spec forbids combining dateStyle or timeStyle with a component
+ * option like timeZoneName (throws "Invalid option : option" in Node's
+ * ICU at request time - a real production crash, only found once real
+ * unlogged-session data existed to render; some browsers are lenient
+ * about this combination, Node is not).
+ */
+export function formatScheduledInstant(scheduledAtISO: string): string {
+  return new Intl.DateTimeFormat("en-US", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    timeZoneName: "short",
+  }).format(new Date(scheduledAtISO));
+}
+
 /** Formats a fixture date as "Today" / "1 day ago" / "{n} days ago", relative to now. */
 export function formatRelativeDays(dateISO: string, now: Date = new Date()): string {
   const then = new Date(`${dateISO}T00:00:00`);
