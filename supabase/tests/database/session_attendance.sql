@@ -5,10 +5,11 @@
 -- service_role for the RLS half.
 
 begin;
-select plan(30);
+select plan(32);
 
 insert into partner_organizations (id, name, referral_link_slug) values
-  ('11111111-0000-0000-0000-000000000601', 'X4 Test Org', 'pgtap-x4-org');
+  ('11111111-0000-0000-0000-000000000601', 'X4 Test Org', 'pgtap-x4-org'),
+  ('11111111-0000-0000-0000-000000000602', 'X4 Test Org (Other)', 'pgtap-x4-org-other');
 
 insert into programs (id, name, developer, session_count, session_duration_minutes, delivery_formats, languages, facilitator_qualification, license_status) values
   ('99999999-0000-0000-0000-000000000601', 'pgTAP X4 Program', 'Test Developer', 3, 90, array['video'], array['English'], 'Lay leader', 'licensed');
@@ -19,10 +20,18 @@ insert into auth.users (id, email) values
   ('66666666-0000-0000-0000-000000000601', 'x4-facilitator-a@example.com'),
   ('66666666-0000-0000-0000-000000000602', 'x4-facilitator-b@example.com'),
   ('66666666-0000-0000-0000-000000000603', 'x4-admin@example.com'),
-  ('66666666-0000-0000-0000-000000000604', 'x4-member-a@example.com');
+  ('66666666-0000-0000-0000-000000000604', 'x4-member-a@example.com'),
+  ('66666666-0000-0000-0000-000000000605', 'x4-partner-own-org@example.com'),
+  ('66666666-0000-0000-0000-000000000606', 'x4-partner-other-org@example.com');
 update profiles set role = 'facilitator' where id = '66666666-0000-0000-0000-000000000601';
 update profiles set role = 'facilitator' where id = '66666666-0000-0000-0000-000000000602';
 update profiles set role = 'admin' where id = '66666666-0000-0000-0000-000000000603';
+-- A5: session_attendance_select_own_partner_referrals coverage - one
+-- partner_staff user scoped to the SAME org as the enrolled applicants
+-- (should see their attendance), one scoped to a different org (should
+-- see none of it).
+update profiles set role = 'partner_staff', partner_organization_id = '11111111-0000-0000-0000-000000000601' where id = '66666666-0000-0000-0000-000000000605';
+update profiles set role = 'partner_staff', partner_organization_id = '11111111-0000-0000-0000-000000000602' where id = '66666666-0000-0000-0000-000000000606';
 
 -- A4-cert's enforce_cohort_program_and_facilitator() trigger blocks
 -- assigning an uncertified facilitator to a cohort - both test
@@ -254,6 +263,28 @@ select is(
 );
 reset role;
 
+-- A5: session_attendance_select_own_partner_referrals - both enrolled
+-- applicants (601, 602) belong to the SAME partner org, so a partner_staff
+-- user scoped to that org sees both attendance rows for this session; a
+-- partner_staff user scoped to a different org sees none of it.
+set local role authenticated;
+set local request.jwt.claims to '{"sub": "66666666-0000-0000-0000-000000000605", "role": "authenticated"}';
+select is(
+  (select count(*)::int from session_attendance where session_id = '55555555-0000-0000-0000-000000000601'),
+  2,
+  'partner_staff scoped to the applicants'' own org can read this session''s attendance'
+);
+reset role;
+
+set local role authenticated;
+set local request.jwt.claims to '{"sub": "66666666-0000-0000-0000-000000000606", "role": "authenticated"}';
+select is(
+  (select count(*)::int from session_attendance where session_id = '55555555-0000-0000-0000-000000000601'),
+  0,
+  'partner_staff scoped to a DIFFERENT org cannot read this session''s attendance'
+);
+reset role;
+
 -- ---------------------------------------------------------------------
 -- list_cohort_roster_for_facilitator: X4's facilitator-side roster
 -- lookup (list_cohort_roster from L5 only resolves "my cohort" via the
@@ -304,3 +335,9 @@ rollback;
 -- list facilitator-a's cohort roster" failed with no exception where one
 -- was expected. All four restored, reset --local, all 28 passed again
 -- after each.
+--
+-- A5 (20260903110000, session_attendance_select_own_partner_referrals):
+-- commented out the policy, reset --local, re-ran - "partner_staff
+-- scoped to the applicants' own org can read this session's attendance"
+-- failed ("have: 0, want: 2"). Restored, reset --local, all 32 passed
+-- again.

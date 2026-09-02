@@ -7,6 +7,7 @@ import {
   getPartnerReferralSummary,
   getUnloggedPastSessions,
   getConsecutiveAbsenceFlags,
+  getPartnerAttendanceExportRows,
 } from "@/lib/admin/reports";
 
 const admin = createAdminClient();
@@ -466,5 +467,208 @@ describe("getPartnerReferralSummary", () => {
     const found = summary.find((r) => r.id === applicantIds[0]);
     expect(found?.partnerReferenceId).toBe("org-a-ref-001");
     expect(found?.status).toBe("pending_review");
+  });
+});
+
+describe("getPartnerAttendanceExportRows", () => {
+  let adminUser: { id: string };
+  let partnerStaffAUser: { id: string };
+  let partnerStaffBUser: { id: string };
+  let orgAId: string;
+  let orgBId: string;
+  let programId: string;
+  let cohortAId: string;
+  let sessionId: string;
+  const applicantIds: string[] = [];
+
+  beforeAll(async () => {
+    const { data: adminData, error: adminError } = await admin.auth.admin.createUser({
+      email: `reports-export-admin-${Date.now()}@example.com`,
+      email_confirm: true,
+    });
+    if (adminError || !adminData.user) throw adminError ?? new Error("createUser failed");
+    adminUser = adminData.user;
+    await admin.from("profiles").update({ role: "admin" }).eq("id", adminUser.id);
+
+    const { data: orgA, error: orgAError } = await admin
+      .from("partner_organizations")
+      .insert({ name: "Export Org A", referral_link_slug: `export-org-a-${Date.now()}` })
+      .select("id")
+      .single();
+    if (orgAError || !orgA) throw orgAError ?? new Error("failed to create org");
+    orgAId = orgA.id;
+
+    const { data: orgB, error: orgBError } = await admin
+      .from("partner_organizations")
+      .insert({ name: "Export Org B", referral_link_slug: `export-org-b-${Date.now()}` })
+      .select("id")
+      .single();
+    if (orgBError || !orgB) throw orgBError ?? new Error("failed to create org");
+    orgBId = orgB.id;
+
+    const { data: staffA, error: staffAError } = await admin.auth.admin.createUser({
+      email: `reports-export-partner-a-${Date.now()}@example.com`,
+      email_confirm: true,
+    });
+    if (staffAError || !staffA.user) throw staffAError ?? new Error("createUser failed");
+    partnerStaffAUser = staffA.user;
+    await admin
+      .from("profiles")
+      .update({ role: "partner_staff", partner_organization_id: orgAId })
+      .eq("id", partnerStaffAUser.id);
+
+    const { data: staffB, error: staffBError } = await admin.auth.admin.createUser({
+      email: `reports-export-partner-b-${Date.now()}@example.com`,
+      email_confirm: true,
+    });
+    if (staffBError || !staffB.user) throw staffBError ?? new Error("createUser failed");
+    partnerStaffBUser = staffB.user;
+    await admin
+      .from("profiles")
+      .update({ role: "partner_staff", partner_organization_id: orgBId })
+      .eq("id", partnerStaffBUser.id);
+
+    const { data: program, error: programError } = await admin
+      .from("programs")
+      .insert({
+        name: "Export Test Program",
+        developer: "Test Developer",
+        session_count: 2,
+        session_duration_minutes: 90,
+        delivery_formats: ["video"],
+        languages: ["English"],
+        facilitator_qualification: "Lay leader",
+        license_status: "licensed",
+      })
+      .select("id")
+      .single();
+    if (programError || !program) throw programError ?? new Error("failed to create program");
+    programId = program.id;
+
+    const { data: cohortA, error: cohortAError } = await admin
+      .from("cohorts")
+      .insert({
+        name: "Export Test Cohort A",
+        grouping_description: "x",
+        capacity: 8,
+        cadence: "weekly",
+        meeting_day_of_week: 2,
+        meeting_time: "18:30",
+        time_zone: "America/New_York",
+        program_id: programId,
+        status: "active",
+      })
+      .select("id")
+      .single();
+    if (cohortAError || !cohortA) throw cohortAError ?? new Error("failed to create cohort");
+    cohortAId = cohortA.id;
+
+    // Org A: one applicant with a logged, attended session (has real
+    // attendance data to export); one applicant with none yet (should
+    // still export as a single row with null session/attendance).
+    const { data: applicantA1, error: applicantA1Error } = await admin
+      .from("applicants")
+      .insert({
+        partner_organization_id: orgAId,
+        cohort_id: cohortAId,
+        referral_source: "partner_link",
+        partner_reference_id: "export-org-a-ref-001",
+        first_name: "Export",
+        last_name: "AttendedMember",
+        status: "enrolled",
+      })
+      .select("id")
+      .single();
+    if (applicantA1Error || !applicantA1) throw applicantA1Error ?? new Error("failed to create applicant");
+    applicantIds.push(applicantA1.id);
+
+    const { data: applicantA2, error: applicantA2Error } = await admin
+      .from("applicants")
+      .insert({
+        partner_organization_id: orgAId,
+        referral_source: "partner_link",
+        partner_reference_id: "export-org-a-ref-002",
+        first_name: "Export",
+        last_name: "PendingMember",
+        status: "pending_review",
+      })
+      .select("id")
+      .single();
+    if (applicantA2Error || !applicantA2) throw applicantA2Error ?? new Error("failed to create applicant");
+    applicantIds.push(applicantA2.id);
+
+    // Org B: not visible to Org A's export at all.
+    const { data: applicantB, error: applicantBError } = await admin
+      .from("applicants")
+      .insert({
+        partner_organization_id: orgBId,
+        referral_source: "partner_link",
+        partner_reference_id: "export-org-b-ref-001",
+        first_name: "Export",
+        last_name: "OrgBMember",
+        status: "pending_review",
+      })
+      .select("id")
+      .single();
+    if (applicantBError || !applicantB) throw applicantBError ?? new Error("failed to create applicant");
+    applicantIds.push(applicantB.id);
+
+    const { data: session, error: sessionError } = await admin
+      .from("sessions")
+      .insert({ cohort_id: cohortAId, session_number: 1, scheduled_at: new Date().toISOString(), status: "scheduled" })
+      .select("id")
+      .single();
+    if (sessionError || !session) throw sessionError ?? new Error("failed to create session");
+    sessionId = session.id;
+
+    await admin
+      .from("session_attendance")
+      .insert({ session_id: sessionId, applicant_id: applicantA1.id, status: "present", marked_by: adminUser.id });
+  });
+
+  afterAll(async () => {
+    await admin.from("session_attendance").delete().eq("session_id", sessionId);
+    await admin.from("sessions").delete().eq("cohort_id", cohortAId);
+    await admin.from("applicants").delete().in("id", applicantIds);
+    await admin.from("cohorts").delete().eq("id", cohortAId);
+    await admin.from("programs").delete().eq("id", programId);
+    await admin.from("partner_organizations").delete().in("id", [orgAId, orgBId]);
+    await admin.auth.admin.deleteUser(partnerStaffAUser.id);
+    await admin.auth.admin.deleteUser(partnerStaffBUser.id);
+    await admin.auth.admin.deleteUser(adminUser.id);
+  });
+
+  it("rejects a non-partner_staff caller", async () => {
+    const adminClient = await clientForUser(adminUser.id);
+    await expect(getPartnerAttendanceExportRows(adminClient)).rejects.toThrow(ForbiddenError);
+  });
+
+  it("includes a real attendance row for Org A's own attended applicant, scoped by the new RLS policy", async () => {
+    const orgAClient = await clientForUser(partnerStaffAUser.id);
+    const rows = await getPartnerAttendanceExportRows(orgAClient);
+    const attended = rows.find((r) => r.applicantId === applicantIds[0]);
+    expect(attended).toMatchObject({
+      partnerReferenceId: "export-org-a-ref-001",
+      cohortName: "Export Test Cohort A",
+      sessionNumber: 1,
+      attendanceStatus: "present",
+    });
+  });
+
+  it("includes a not-yet-logged applicant as one row with null session/attendance fields", async () => {
+    const orgAClient = await clientForUser(partnerStaffAUser.id);
+    const rows = await getPartnerAttendanceExportRows(orgAClient);
+    const pending = rows.find((r) => r.applicantId === applicantIds[1]);
+    expect(pending).toMatchObject({
+      partnerReferenceId: "export-org-a-ref-002",
+      sessionNumber: null,
+      attendanceStatus: null,
+    });
+  });
+
+  it("never includes Org B's applicant or attendance in Org A's export", async () => {
+    const orgAClient = await clientForUser(partnerStaffAUser.id);
+    const rows = await getPartnerAttendanceExportRows(orgAClient);
+    expect(rows.some((r) => r.applicantId === applicantIds[2])).toBe(false);
   });
 });
