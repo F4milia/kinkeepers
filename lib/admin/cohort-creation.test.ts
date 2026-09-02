@@ -265,4 +265,80 @@ describe("createCohortAction", () => {
       .eq("action", "cohort_creation_failed");
     expect(auditRows).toHaveLength(1);
   });
+
+  // P3: "a cohort with its own Zoom credentials uses them." No
+  // zoomCredentials override is passed here - the real
+  // resolveZoomCredentialsForPartner() DB lookup runs, same as a real
+  // caller, only the fetch is still mocked so no real network call
+  // happens. process.env.ZOOM_ACCOUNT_ID etc. are asserted absent from
+  // the request the mocked fetch actually receives - proving the
+  // partner's OWN credentials were used, not silently falling back to
+  // the default ones.
+  it("a cohort assigned to a partner with its own Zoom credentials uses them, not the default account", async () => {
+    const { data: partnerOrg, error: partnerOrgError } = await admin
+      .from("partner_organizations")
+      .insert({ name: "Cohort Creation Zoom-Credentials Org", referral_link_slug: `cohort-creation-zoom-org-${Date.now()}` })
+      .select("id")
+      .single();
+    if (partnerOrgError || !partnerOrg) throw partnerOrgError ?? new Error("failed to create partner org");
+
+    const partnerCredentials = { accountId: "partner-acct-1", clientId: "partner-client-1", clientSecret: "partner-secret-1" };
+    const { error: credsError } = await admin.from("partner_zoom_credentials").insert({
+      partner_organization_id: partnerOrg.id,
+      account_id: partnerCredentials.accountId,
+      client_id: partnerCredentials.clientId,
+      client_secret: partnerCredentials.clientSecret,
+    });
+    if (credsError) throw credsError;
+
+    const adminClient = await clientForUser(adminUser.id);
+    const zoomFetch = mockSuccessfulZoomFetch();
+
+    const result = await createCohortAction(
+      { ...baseInput, programId: licensedProgramId, facilitatorId: facilitatorUser.id, partnerOrganizationId: partnerOrg.id },
+      adminClient,
+      undefined,
+      zoomFetch as unknown as typeof fetch,
+    );
+
+    expect(result.success).toBe(true);
+    if (!result.success) throw new Error("expected success");
+    createdCohortIds.push(result.cohortId);
+
+    // The OAuth token exchange (first fetch call) carries a Basic-auth
+    // header built from the partner's own client id/secret, not the
+    // (nonexistent in this test env) default env-var credentials.
+    const tokenCallHeaders = zoomFetch.mock.calls[0][1].headers as Record<string, string>;
+    const expectedBasicAuth = `Basic ${Buffer.from(`${partnerCredentials.clientId}:${partnerCredentials.clientSecret}`).toString("base64")}`;
+    expect(tokenCallHeaders.Authorization).toBe(expectedBasicAuth);
+
+    const { data: sessions } = await admin
+      .from("sessions")
+      .select("video_provider")
+      .eq("cohort_id", result.cohortId);
+    expect(sessions?.every((s) => s.video_provider === "partner")).toBe(true);
+  });
+
+  it("a cohort with no partner_organization_id uses the default account and is labeled 'kinkeepers'", async () => {
+    const adminClient = await clientForUser(adminUser.id);
+    const zoomCredentials = freshZoomCredentials();
+    const zoomFetch = mockSuccessfulZoomFetch();
+
+    const result = await createCohortAction(
+      { ...baseInput, programId: licensedProgramId, facilitatorId: facilitatorUser.id },
+      adminClient,
+      zoomCredentials,
+      zoomFetch as unknown as typeof fetch,
+    );
+
+    expect(result.success).toBe(true);
+    if (!result.success) throw new Error("expected success");
+    createdCohortIds.push(result.cohortId);
+
+    const { data: sessions } = await admin
+      .from("sessions")
+      .select("video_provider")
+      .eq("cohort_id", result.cohortId);
+    expect(sessions?.every((s) => s.video_provider === "kinkeepers")).toBe(true);
+  });
 });
