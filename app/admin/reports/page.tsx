@@ -9,16 +9,7 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
 import { buttonClasses } from "@/components/ui/button";
-
-// Admin-only oversight list, not a member-facing screen - shown as a
-// real instant with an explicit zone name rather than lib/format-date.ts's
-// formatSessionDay (which expects a bare "YYYY-MM-DD" fixture date, not a
-// full sessions.scheduled_at timestamptz).
-function formatScheduledInstant(scheduledAtISO: string): string {
-  return new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeStyle: "short", timeZoneName: "short" }).format(
-    new Date(scheduledAtISO),
-  );
-}
+import { formatScheduledInstant } from "@/lib/format-date";
 
 const STATUS_BADGE: Record<string, "neutral" | "accent" | "gentle"> = {
   draft: "gentle",
