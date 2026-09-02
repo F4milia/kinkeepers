@@ -262,8 +262,25 @@ interface SessionRow {
   video_dial_in_pin: string | null;
 }
 
-function mapSessionStatus(status: SessionRow["status"]): SessionStatus {
-  return status === "scheduled" ? "upcoming" : "past";
+// Real production bug, found manually testing A5: nothing in this
+// codebase EVER transitions sessions.status from 'scheduled' to
+// 'completed' (confirmed by grep - no caller sets it) - it's a real DB
+// enum value, but a dead one in practice. The old version of this
+// function (`status === "scheduled" ? "upcoming" : "past"`) therefore
+// mapped EVERY real session to "upcoming" forever, no matter how long
+// ago scheduled_at passed, because status never stops being 'scheduled'.
+// That silently broke getUpcomingSession() (would return session 1
+// forever instead of advancing), getFacilitatorSessionsNeedingLog()
+// (never surfaced anything, since nothing is ever "past"), and
+// fetchSessionLogDetails (never fetched, since it only runs for a
+// "past" session). Existing tests never caught this because they seed a
+// literal `status: 'completed'` row directly via the admin client to
+// represent "a past session" - a condition that matches no real row
+// this app has ever produced. "Past" is now genuinely derived from
+// scheduled_at vs now(), not trusted from an enum value nothing sets.
+function mapSessionStatus(status: SessionRow["status"], scheduledAtISO: string): SessionStatus {
+  if (status !== "scheduled") return "past";
+  return new Date(scheduledAtISO).getTime() > Date.now() ? "upcoming" : "past";
 }
 
 /**
@@ -308,7 +325,7 @@ async function toSession(
 ): Promise<Session> {
   const instant = new Date(row.scheduled_at);
   const { date, time, timeZoneLabel } = sessionDateTimeFields(instant, memberTimeZone ?? cohort.time_zone);
-  const status = mapSessionStatus(row.status);
+  const status = mapSessionStatus(row.status, row.scheduled_at);
   const logDetails = status === "past" ? await fetchSessionLogDetails(supabase, row.id) : {};
 
   return {
@@ -479,15 +496,18 @@ export async function getNextFacilitatorSession(callerClient?: SupabaseClient): 
 }
 
 /**
- * Past sessions with no delivery confirmation yet. No session-log
- * backend exists at all yet (attendance tracking is X4's unbuilt
- * territory, per this session's own explicit assumption list) - every
- * past session is honestly "needs a log" since no log has ever been
- * submitted for any of them.
+ * Past sessions with no delivery confirmation yet. `deliveryConfirmed`
+ * is only ever populated for a "past" session (see fetchSessionLogDetails
+ * above) - real bug found manually testing this: the filter used to be
+ * `status === "past"` alone, so once mapSessionStatus started correctly
+ * reporting a real past session (it never did before - see CLAUDE.md's
+ * Learned Constraints), a session stayed "needs a log" here FOREVER even
+ * after a facilitator actually submitted one, since nothing checked
+ * whether a log already existed.
  */
 export async function getFacilitatorSessionsNeedingLog(callerClient?: SupabaseClient): Promise<Session[]> {
   const sessions = await getFacilitatorSessions(callerClient);
-  return sessions.filter((session) => session.status === "past");
+  return sessions.filter((session) => session.status === "past" && !session.deliveryConfirmed);
 }
 
 /**

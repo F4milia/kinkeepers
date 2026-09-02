@@ -14,6 +14,7 @@ import {
   getMyCertifications,
   getSessionPrepRoster,
   getSessionPrepMaterials,
+  getFacilitatorSessionsNeedingLog,
 } from "@/lib/data";
 
 const admin = createAdminClient();
@@ -481,5 +482,251 @@ describe("getMyCertifications (F2) - a facilitator's own self-view, scoped by fa
     const client = await clientForUser(facilitatorBId);
     const certifications = await getMyCertifications(client);
     expect(certifications).toEqual([]);
+  });
+});
+
+describe("mapSessionStatus real-world regression - a 'scheduled' row whose time has already passed", () => {
+  // Nothing in this codebase ever transitions sessions.status to
+  // 'completed' (confirmed by grep) - every real session sits at
+  // 'scheduled' forever. The OTHER tests in this file seed a past
+  // session with `status: "completed"` directly, which is a condition
+  // that has never once occurred in production and silently hid a real
+  // bug: every session mapped to "upcoming" regardless of scheduled_at,
+  // because the old mapSessionStatus only looked at the enum. This
+  // fixture deliberately uses the ONLY shape a real row ever has -
+  // status: "scheduled" on both a past and a future session - to prove
+  // "past" is now derived from scheduled_at, not trusted from status.
+  let programId: string;
+  let cohortId: string;
+  let partnerOrgId: string;
+  let applicantId: string;
+  let memberUserId: string;
+  let genuinelyPastSessionId: string;
+  let genuinelyUpcomingSessionId: string;
+
+  beforeAll(async () => {
+    const { data: program, error: programError } = await admin
+      .from("programs")
+      .insert({
+        name: "Status Regression Test Program",
+        developer: "Test Developer",
+        session_count: 2,
+        session_duration_minutes: 90,
+        delivery_formats: ["video"],
+        languages: ["English"],
+        facilitator_qualification: "Lay leader",
+        license_status: "licensed",
+      })
+      .select("id")
+      .single();
+    if (programError || !program) throw programError ?? new Error("failed to create program");
+    programId = program.id;
+
+    const { data: cohort, error: cohortError } = await admin
+      .from("cohorts")
+      .insert({
+        name: "Status Regression Test Cohort",
+        grouping_description: "x",
+        capacity: 8,
+        cadence: "weekly",
+        meeting_day_of_week: 2,
+        meeting_time: "18:30",
+        time_zone: "America/New_York",
+        program_id: programId,
+        delivery_format: "video",
+        status: "active",
+      })
+      .select("id")
+      .single();
+    if (cohortError || !cohort) throw cohortError ?? new Error("failed to create cohort");
+    cohortId = cohort.id;
+
+    const { data: org, error: orgError } = await admin
+      .from("partner_organizations")
+      .insert({ name: "Status Regression Test Org", referral_link_slug: `status-regression-${Date.now()}` })
+      .select("id")
+      .single();
+    if (orgError || !org) throw orgError ?? new Error("failed to create org");
+    partnerOrgId = org.id;
+
+    const { data: sessions, error: sessionsError } = await admin
+      .from("sessions")
+      .insert([
+        {
+          cohort_id: cohortId,
+          session_number: 1,
+          // A real row: status stays 'scheduled' even though this time
+          // already passed - nothing ever flips it to 'completed'.
+          scheduled_at: new Date(Date.now() - 7 * 86_400_000).toISOString(),
+          status: "scheduled",
+        },
+        {
+          cohort_id: cohortId,
+          session_number: 2,
+          scheduled_at: new Date(Date.now() + 7 * 86_400_000).toISOString(),
+          status: "scheduled",
+        },
+      ])
+      .select("id, session_number");
+    if (sessionsError || !sessions) throw sessionsError ?? new Error("failed to create sessions");
+    genuinelyPastSessionId = sessions.find((s) => s.session_number === 1)!.id;
+    genuinelyUpcomingSessionId = sessions.find((s) => s.session_number === 2)!.id;
+
+    const { data: memberUser, error: memberError } = await admin.auth.admin.createUser({
+      email: `status-regression-member-${Date.now()}@example.com`,
+      email_confirm: true,
+    });
+    if (memberError || !memberUser.user) throw memberError ?? new Error("createUser failed");
+    memberUserId = memberUser.user.id;
+
+    const { data: applicant, error: applicantError } = await admin
+      .from("applicants")
+      .insert({
+        partner_organization_id: partnerOrgId,
+        referral_source: "partner_link",
+        first_name: "Regression",
+        last_name: "Member",
+        email: memberUser.user.email,
+        status: "enrolled",
+        cohort_id: cohortId,
+      })
+      .select("id")
+      .single();
+    if (applicantError || !applicant) throw applicantError ?? new Error("failed to create applicant");
+    applicantId = applicant.id;
+  });
+
+  afterAll(async () => {
+    await admin.from("applicants").delete().eq("id", applicantId);
+    await admin.from("sessions").delete().in("id", [genuinelyPastSessionId, genuinelyUpcomingSessionId]);
+    await admin.from("cohorts").delete().eq("id", cohortId);
+    await admin.from("programs").delete().eq("id", programId);
+    await admin.from("partner_organizations").delete().eq("id", partnerOrgId);
+    await admin.auth.admin.deleteUser(memberUserId);
+  });
+
+  it("maps a 'scheduled' row whose scheduled_at has already passed to 'past', not 'upcoming'", async () => {
+    const client = await clientForUser(memberUserId);
+    await getViewer(client); // claims the applicant row by email match, same as the sibling describe block above
+    const sessions = await getSessions(cohortId, client);
+    const past = sessions.find((s) => s.id === genuinelyPastSessionId);
+    const upcoming = sessions.find((s) => s.id === genuinelyUpcomingSessionId);
+    expect(past?.status).toBe("past");
+    expect(upcoming?.status).toBe("upcoming");
+  });
+
+  it("getUpcomingSession skips the genuinely-past 'scheduled' session and returns the real next one", async () => {
+    const client = await clientForUser(memberUserId);
+    await getViewer(client);
+    const next = await getUpcomingSession(cohortId, client);
+    expect(next?.id).toBe(genuinelyUpcomingSessionId);
+  });
+});
+
+describe("getFacilitatorSessionsNeedingLog", () => {
+  // Real bug found alongside the mapSessionStatus one above: this filter
+  // used to be `status === "past"` alone, so a session that had ALREADY
+  // been logged would still show up here forever, since nothing checked
+  // deliveryConfirmed. No prior test file covered this function at all.
+  let programId: string;
+  let cohortId: string;
+  let facilitatorId: string;
+  let loggedPastSessionId: string;
+  let unloggedPastSessionId: string;
+  let futureSessionId: string;
+
+  beforeAll(async () => {
+    const { data: facilitatorUser, error: facilitatorError } = await admin.auth.admin.createUser({
+      email: `needs-log-facilitator-${Date.now()}@example.com`,
+      email_confirm: true,
+    });
+    if (facilitatorError || !facilitatorUser.user) throw facilitatorError ?? new Error("createUser failed");
+    facilitatorId = facilitatorUser.user.id;
+    await admin.from("profiles").update({ role: "facilitator" }).eq("id", facilitatorId);
+
+    const { data: program, error: programError } = await admin
+      .from("programs")
+      .insert({
+        name: "Needs Log Test Program",
+        developer: "Test Developer",
+        session_count: 3,
+        session_duration_minutes: 90,
+        delivery_formats: ["video"],
+        languages: ["English"],
+        facilitator_qualification: "Lay leader",
+        license_status: "licensed",
+      })
+      .select("id")
+      .single();
+    if (programError || !program) throw programError ?? new Error("failed to create program");
+    programId = program.id;
+
+    // A4-cert's enforce_cohort_program_and_facilitator() trigger blocks
+    // an uncertified facilitator from being assigned to a cohort.
+    await admin
+      .from("facilitator_certifications")
+      .insert({
+        facilitator_id: facilitatorId,
+        program_id: programId,
+        certified_on: new Date(Date.now() - 30 * 86_400_000).toISOString(),
+        expires_on: new Date(Date.now() + 300 * 86_400_000).toISOString(),
+        certifying_body: "Test Body",
+      });
+
+    const { data: cohort, error: cohortError } = await admin
+      .from("cohorts")
+      .insert({
+        name: "Needs Log Test Cohort",
+        grouping_description: "x",
+        capacity: 8,
+        cadence: "weekly",
+        meeting_day_of_week: 2,
+        meeting_time: "18:30",
+        time_zone: "America/New_York",
+        program_id: programId,
+        status: "active",
+        facilitator_id: facilitatorId,
+      })
+      .select("id")
+      .single();
+    if (cohortError || !cohort) throw cohortError ?? new Error("failed to create cohort");
+    cohortId = cohort.id;
+
+    const { data: sessions, error: sessionsError } = await admin
+      .from("sessions")
+      .insert([
+        { cohort_id: cohortId, session_number: 1, scheduled_at: new Date(Date.now() - 14 * 86_400_000).toISOString(), status: "scheduled" },
+        { cohort_id: cohortId, session_number: 2, scheduled_at: new Date(Date.now() - 7 * 86_400_000).toISOString(), status: "scheduled" },
+        { cohort_id: cohortId, session_number: 3, scheduled_at: new Date(Date.now() + 7 * 86_400_000).toISOString(), status: "scheduled" },
+      ])
+      .select("id, session_number");
+    if (sessionsError || !sessions) throw sessionsError ?? new Error("failed to create sessions");
+    loggedPastSessionId = sessions.find((s) => s.session_number === 1)!.id;
+    unloggedPastSessionId = sessions.find((s) => s.session_number === 2)!.id;
+    futureSessionId = sessions.find((s) => s.session_number === 3)!.id;
+
+    await admin.from("session_logs").insert({
+      session_id: loggedPastSessionId,
+      delivery_confirmed: true,
+      logged_by: facilitatorId,
+    });
+  });
+
+  afterAll(async () => {
+    await admin.from("session_logs").delete().eq("session_id", loggedPastSessionId);
+    await admin.from("sessions").delete().in("id", [loggedPastSessionId, unloggedPastSessionId, futureSessionId]);
+    await admin.from("cohorts").delete().eq("id", cohortId);
+    await admin.from("facilitator_certifications").delete().eq("facilitator_id", facilitatorId);
+    await admin.from("programs").delete().eq("id", programId);
+    await admin.auth.admin.deleteUser(facilitatorId);
+  });
+
+  it("surfaces only the genuinely-past session with no log yet - not the logged one, not the future one", async () => {
+    const client = await clientForUser(facilitatorId);
+    const needingLog = await getFacilitatorSessionsNeedingLog(client);
+    const ids = needingLog.map((s) => s.id);
+    expect(ids).toContain(unloggedPastSessionId);
+    expect(ids).not.toContain(loggedPastSessionId);
+    expect(ids).not.toContain(futureSessionId);
   });
 });
