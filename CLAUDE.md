@@ -99,6 +99,8 @@ Implementation-specific conventions already decided in this codebase — not cov
 
 kinkeepers-frontend-build.md (design system, copy deck) · KINKEEPERS-COMPLETE-RUN-DOC.md (waves, session prompts, edge-case register) · kinkeepers-testing-workflow.md (review pipeline, trigger globs, the 09:30 merge window) · f4milia-master-sequence.md (program data model notes) · f4milia-revenue-model.md §2 (facilitator compensation).
 
+**`f4milia-master-sequence.md` is missing** - referenced above and nowhere in this repo's git history (checked 2026-09-04, all branches). `f4milia-revenue-model.md` had the same problem (present only on a stale, never-merged local branch `docs/f4milia-companion-docs`, based on an Aug 26 commit) until recovered onto `main` the same day - see that PR for the doc's own content, which describes the *separate* F4milia/Trib4l platform's mentor-payout infrastructure (Stripe Connect splits, `mentor_agreements`/`mentor_payouts`) that A4-payouts and F3 are parked on (the run doc's "B1"/"B3"). Whoever can locate `f4milia-master-sequence.md` should add it the same way - a referenced companion doc that doesn't exist is a standing risk of scope drift (see the 2026-09-03 "Real run doc reconciliation" entry below for what that already cost once).
+
 ## Learned constraints — append-only; never edit or remove entries
 
 Format: `YYYY-MM-DD · session · what happened · the rule now`. Every PR tagged `rework` adds a line here before the next session launches. Every discovered hidden coupling or non-obvious constraint adds a line, rework or not. This section is why week four is smarter than week one.
