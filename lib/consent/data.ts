@@ -1,4 +1,5 @@
 import "server-only";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 
 export type ConsentDocumentType =
@@ -38,9 +39,13 @@ export interface ConsentDocumentStatus {
  * Empty array for a signed-out caller (shouldn't happen given the
  * (caregiver) layout's own auth gate, but this file has no reason to
  * assume that always holds).
+ *
+ * `callerClient` is optional and exists for testability (same reasoning
+ * as requireRole() in lib/auth/roles.ts) - real callers never pass it
+ * and get the cookie-bound request client.
  */
-export async function getConsentStatus(): Promise<ConsentDocumentStatus[]> {
-  const supabase = await createClient();
+export async function getConsentStatus(callerClient?: SupabaseClient): Promise<ConsentDocumentStatus[]> {
+  const supabase = callerClient ?? (await createClient());
   const {
     data: { user },
   } = await supabase.auth.getUser();

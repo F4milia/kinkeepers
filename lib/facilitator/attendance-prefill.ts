@@ -4,6 +4,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireRole, ForbiddenError } from "@/lib/auth/roles";
 import { getAttendancePreFill } from "@/lib/zoom/attendance";
+import { getDefaultZoomCredentials, type ZoomCredentials } from "@/lib/zoom/client";
 import { matchPhoneParticipants } from "@/lib/zoom/phone-matching";
 
 export interface AttendancePreFillSuggestion {
@@ -35,10 +36,22 @@ export type AttendancePreFillResult =
  * suggestions for the caller to seed a form with; submit_session_log()
  * is still the only real write path, and the facilitator can change any
  * suggestion before submitting.
+ *
+ * `callerClient`, `zoomCredentials`, and `zoomFetchImpl` are all optional
+ * and exist for testability, same reasoning as elsewhere in this
+ * codebase (requireRole(), createRecurringMeeting()) - real callers
+ * never pass them. `zoomCredentials` is resolved lazily (not a default
+ * parameter value, which JS evaluates eagerly at call time, before this
+ * function's own role/ownership/occurrence checks ever run) - a caller
+ * without permission, or a session with no video_occurrence_id, gets
+ * that answer without this function ever needing real Zoom credentials
+ * to exist at all.
  */
 export async function getSessionAttendancePreFillAction(
   sessionId: string,
   callerClient?: SupabaseClient,
+  zoomCredentials?: ZoomCredentials,
+  zoomFetchImpl: typeof fetch = fetch,
 ): Promise<AttendancePreFillResult> {
   const { userId, role } = await requireRole(["facilitator", "admin"], callerClient);
   const admin = createAdminClient();
@@ -69,7 +82,7 @@ export async function getSessionAttendancePreFillAction(
 
   let preFill;
   try {
-    preFill = await getAttendancePreFill(session.video_occurrence_id);
+    preFill = await getAttendancePreFill(session.video_occurrence_id, zoomCredentials ?? getDefaultZoomCredentials(), zoomFetchImpl);
   } catch {
     return { available: false, reason: "Could not reach Zoom for this session's participant report." };
   }

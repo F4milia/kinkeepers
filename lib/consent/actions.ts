@@ -1,5 +1,6 @@
 "use server";
 
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import type { ConsentDocumentType } from "@/lib/consent/data";
@@ -12,12 +13,16 @@ export type RecordConsentResult = { success: true } | { success: false; reason: 
  * RLS (member_consents_insert_own: `member_id = auth.uid()`) would block
  * a mismatch anyway, but resolving it server-side means there's nothing
  * for a client to even attempt to spoof.
+ *
+ * `callerClient` is optional and exists for testability - real callers
+ * never pass it and get the cookie-bound request client.
  */
 export async function recordConsent(
   documentType: ConsentDocumentType,
   version: number,
+  callerClient?: SupabaseClient,
 ): Promise<RecordConsentResult> {
-  const supabase = await createClient();
+  const supabase = callerClient ?? (await createClient());
   const {
     data: { user },
   } = await supabase.auth.getUser();
