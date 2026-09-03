@@ -4,6 +4,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireRole } from "@/lib/auth/roles";
 import { recordAuditEvent } from "@/lib/audit/record-audit-event";
+import { getRequestOrigin } from "@/lib/auth/actions";
 
 export type IssueAdminSignInLinkResult =
   | { success: true; actionLink: string }
@@ -69,6 +70,20 @@ export async function issueAdminSignInLink(
     return { success: false, reason: "not_found" };
   }
 
+  // generateLink()'s own action_link is unusable here: PKCE requires a
+  // code_verifier only the ORIGINATING client holds, which is impossible
+  // for an admin acting on someone else's behalf, so GoTrue issues an
+  // implicit-flow-style link instead - one whose session tokens land in
+  // the URL hash fragment. This app's /auth/callback never reads a hash
+  // fragment (only ?code=), and nothing client-side calls setSession(),
+  // so that link silently never establishes a session. hashed_token is
+  // the documented server-side-verifiable alternative: redeemed via
+  // verifyOtp({ token_hash, type }), which needs no PKCE verifier at all.
+  // Point the link at our own callback route so it goes through the same
+  // audited, role-resolving redirect as every other sign-in.
+  const origin = await getRequestOrigin();
+  const actionLink = `${origin}/auth/callback?token_hash=${linkData.properties.hashed_token}&type=magiclink`;
+
   // The audit write can't be made atomic with generateLink() - that's an
   // external GoTrue Admin API call, not a SQL statement, so it can't
   // share a Postgres transaction with record_audit_event() the way the
@@ -89,5 +104,5 @@ export async function issueAdminSignInLink(
     return { success: false, reason: "audit_failed" };
   }
 
-  return { success: true, actionLink: linkData.properties.action_link };
+  return { success: true, actionLink };
 }

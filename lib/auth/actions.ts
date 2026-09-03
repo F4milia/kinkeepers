@@ -15,7 +15,7 @@ import { logSignInEvent } from "@/lib/auth/log-sign-in-event";
 // actual incoming request instead means the redirect always matches
 // wherever the request really came from - production, any preview, or
 // local dev - with no per-environment configuration at all.
-async function getRequestOrigin(): Promise<string> {
+export async function getRequestOrigin(): Promise<string> {
   const headersList = await headers();
   const host = headersList.get("host");
   const protocol = process.env.NODE_ENV === "development" ? "http" : "https";

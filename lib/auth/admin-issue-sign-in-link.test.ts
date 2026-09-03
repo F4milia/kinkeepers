@@ -1,9 +1,17 @@
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
-import { describe, expect, it, beforeAll, afterAll, beforeEach } from "vitest";
+import { describe, expect, it, beforeAll, afterAll, beforeEach, vi } from "vitest";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { issueAdminSignInLink } from "@/lib/auth/admin-issue-sign-in-link";
 import { ForbiddenError } from "@/lib/auth/roles";
 import { clientForUser } from "@/test/helpers/local-auth";
+
+// headers() throws outside a real Next.js request context (same as
+// cookies()/revalidatePath() elsewhere in this codebase) - mocked with a
+// fixed local host so getRequestOrigin() resolves, same pattern as
+// actions.test.ts.
+vi.mock("next/headers", () => ({
+  headers: async () => ({ get: (name: string) => (name === "host" ? "localhost:3000" : null) }),
+}));
 
 const admin = createAdminClient();
 
@@ -106,6 +114,32 @@ describe("issueAdminSignInLink", () => {
     expect(result.success).toBe(true);
     if (!result.success) throw new Error("expected success");
     expect(result.actionLink).toContain("magiclink");
+
+    // The link must actually establish a session, not just contain the
+    // right string - generateLink()'s own action_link looks superficially
+    // fine (it does contain "magiclink" too) while being unredeemable via
+    // this app's PKCE-only callback route, which is exactly the bug this
+    // fix addresses. Redeem the link's own token_hash the same way
+    // app/auth/callback/route.ts does, with a plain anon client (no
+    // PKCE/service-role involved), and confirm a real session comes back
+    // for the right user.
+    const linkUrl = new URL(result.actionLink);
+    const tokenHash = linkUrl.searchParams.get("token_hash");
+    const type = linkUrl.searchParams.get("type");
+    expect(tokenHash).toBeTruthy();
+    expect(type).toBe("magiclink");
+
+    const anonClient = createSupabaseClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    );
+    const redeemed = await anonClient.auth.verifyOtp({
+      token_hash: tokenHash!,
+      type: "magiclink",
+    });
+    expect(redeemed.error).toBeNull();
+    expect(redeemed.data.session).not.toBeNull();
+    expect(redeemed.data.user?.id).toBe(memberUser.id);
 
     const { data: auditRows } = await admin
       .from("audit_log")
