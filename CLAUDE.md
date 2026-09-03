@@ -84,6 +84,16 @@ Implementation-specific conventions already decided in this codebase — not cov
   to the same containers. Whoever runs `db:reset` needs the full current
   `supabase/migrations/` directory, not just their own new files, or it silently drops schema
   the other stream depends on.
+- **Production (`vnadfnnckmkswfrzfjkj`, cut over as part of R1) never receives test data —
+  prevention, not cleanup.** The old hosted project (`lupiicjafzrbihaosezv`) is now staging only,
+  wired to Vercel's Preview environment; production is wired to Production only, and the two are
+  separate databases a code deploy never moves data between. Any manual test data for a fix or
+  improvement (a test cohort, a backdated session, a throwaway applicant) always targets staging
+  or local — never production directly — and whoever is about to write test data states which
+  environment it's headed for before doing it. This is the guarantee that production stays clean
+  for real cohorts: there being nothing to delete before launch, not a promise to remember to
+  delete it after. Confirmed with Ferenz (2026-09-03) as the standing rule for both streams
+  post-cutover.
 
 ## Companion docs
 
