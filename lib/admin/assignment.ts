@@ -114,6 +114,7 @@ export async function assignApplicantToCohortAction(
   // notification wired into an admin mutation this way.
   await notifyBestEffort(
     () => notifyCohortAssigned(admin, applicantId, cohortId),
+    "applicant_notification_failed",
     { applicant_id: applicantId, cohort_id: cohortId },
   );
 

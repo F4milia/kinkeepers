@@ -25,6 +25,18 @@ const eslintConfig = [
       "supabase/.branches/**",
     ],
   },
+  {
+    rules: {
+      // The codebase already names an intentionally-unused parameter
+      // with a leading underscore (e.g. getFacilitator's _cohortId - no
+      // facilitator display name/bio exists in the schema yet, kept for
+      // future use and so callers don't need to change when it's built)
+      // - this was silently NOT honored by next/typescript's default
+      // preset, producing warnings on a pattern the codebase already
+      // uses as its own "deliberately unused" convention.
+      "@typescript-eslint/no-unused-vars": ["warn", { argsIgnorePattern: "^_", varsIgnorePattern: "^_" }],
+    },
+  },
 ];
 
 export default eslintConfig;

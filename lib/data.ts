@@ -278,9 +278,18 @@ interface SessionRow {
 // represent "a past session" - a condition that matches no real row
 // this app has ever produced. "Past" is now genuinely derived from
 // scheduled_at vs now(), not trusted from an enum value nothing sets.
+// Exported (not local to this file) so lib/admin/reports.ts's
+// getUnloggedPastSessions can share this exact rule instead of
+// independently re-deriving and re-explaining it - the two are the only
+// two places in the codebase that ever needed to answer "is this session
+// past," and until now each carried its own copy of the same reasoning.
+export function isSessionPast(status: "scheduled" | "completed" | "cancelled", scheduledAtISO: string): boolean {
+  if (status !== "scheduled") return true;
+  return new Date(scheduledAtISO).getTime() <= Date.now();
+}
+
 function mapSessionStatus(status: SessionRow["status"], scheduledAtISO: string): SessionStatus {
-  if (status !== "scheduled") return "past";
-  return new Date(scheduledAtISO).getTime() > Date.now() ? "upcoming" : "past";
+  return isSessionPast(status, scheduledAtISO) ? "past" : "upcoming";
 }
 
 /**
