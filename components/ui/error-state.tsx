@@ -10,13 +10,22 @@ import { COPY, format } from "@/lib/copy";
  *
  * The phone number appears in every variant - CLAUDE.md: "this
  * population's fallback is a person, not a refresh."
+ *
+ * `homeHref` defaults to "/" (the caregiver home) but a caller whose
+ * not-found page can be reached by a non-member role (e.g. an admin or
+ * facilitator hitting a route gated to a different role) must pass that
+ * role's own roleHomePath() - otherwise "Go to Home" sends them to "/",
+ * which 404s again for them and turns this into a dead-end loop, exactly
+ * what CLAUDE.md's "error states never dead-end" rule forbids.
  */
 export function ErrorState({
   variant,
   onRetry,
+  homeHref = "/",
 }: {
   variant: "unavailable" | "not_found";
   onRetry?: () => void;
+  homeHref?: string;
 }) {
   const copy = variant === "not_found" ? COPY.errors.not_found : COPY.errors.network;
 
@@ -25,7 +34,7 @@ export function ErrorState({
       <p className="text-h3 font-heading text-ink">{copy.headline}</p>
       <p className="max-w-md text-body font-ui text-ink-soft">{copy.body}</p>
       {variant === "not_found" ? (
-        <Link href="/" className={buttonClasses("primary")}>
+        <Link href={homeHref} className={buttonClasses("primary")}>
           {COPY.errors.not_found.go_home}
         </Link>
       ) : onRetry ? (
