@@ -1633,3 +1633,281 @@ release stays behind the B3 reviewer gate.
 
 Commit: "feat: facilitator account, certifications, payouts"
 ```
+
+---
+
+# **PROPOSED — B1 / B3: Facilitator agreements and payouts (added 2026-09-04, not yet approved)**
+
+**Status:** proposal for Ivan's review at 09:30. Not runnable until the four decisions below are recorded here. Written by Stream A after confirming that "B1"/"B3" do not correspond to any session in any F4milia/Trib4l planning document — `trib4l-build-from-zero.md` v2.1 builds org-level Stripe Connect commerce (Sessions 13–16) and platform revenue-ops (Session 19), never individual mentor or facilitator compensation; the F4milia Complete Run Doc states "commerce stays dormant-per-Tower and nothing in this doc touches it"; and `f4milia-revenue-model.md` flags mentor payouts as "new scope beyond what Session 9 or Session 16 currently describe... worth resolving which session owns it," which no later document did. A4-payouts and F3 were parked on work nobody scheduled. These two prompts are that work, scoped to KinKeepers' own schema — KinKeepers runs its own Supabase project, so there is no parent-platform table for its screens to read from regardless of what F4milia builds later.
+
+**Naming.** A4-payouts and F3 say `mentor_agreements` / `mentor_payouts`. KinKeepers has no mentor role (`app_role` is admin / facilitator / partner_staff / member); the tables below are `facilitator_agreements` / `facilitator_payouts`. Read the A4-payouts and F3 prompts with that substitution.
+
+**B2 is deliberately not written.** Moving money through the platform — Stripe Connect, bank details — is out: Stripe is not in the KinKeepers stack, F4milia's own run doc keeps commerce dormant, and `f4milia-revenue-model.md` §3 puts the payment-platform legal items ahead of any of it. B3's "release" is a reviewer gate that records that payment happened out of band. It is not a transfer.
+
+## Decisions Ivan records before B1 launches
+
+| # | Decision | Recommendation | Why it can't be built around |
+| ----- | ----- | ----- | ----- |
+| 1 | Do KinKeepers facilitators earn a revenue share, or a per-session rate only? | **Per-session only.** `f4milia-revenue-model.md` §2's facilitator row says exactly that: "Runs sessions to our curriculum. Not a draw. Per-session rate only. No share." F3's prompt text ("share of revenue from members past 60 days") is the *mentor* row's model, and "retained member revenue" has no referent in KinKeepers, which is sold to health systems, not to members. | It decides whether B1 has share columns at all, and whether F3's compensation paragraph is true. A column nothing writes is a claim nothing checks. |
+| 2 | What does "release" do? | **Status change plus audit row, nothing else.** The reviewer records the out-of-band payment reference (payroll batch, invoice number) in a required release note. | Anything more is B2, and B2 is gated on legal. |
+| 3 | Payout period | **Calendar month.** A facilitator runs several cohorts at once; a monthly statement is what a contractor expects and composes cleanly with substitute attribution. Per-cohort statements split one person's month across N screens. | Period is the grain of the payout row. Changing it after real rows exist is a rewrite, not a migration. |
+| 4 | One rate per facilitator, or per (facilitator, program)? | **Per facilitator.** Nothing in either companion doc prices Stress-Busting differently from Tele-Savvy. If that's wrong, add a nullable `program_id` to `facilitator_agreements` in B1 — not after B3 has frozen rates onto payout rows. | Same reason as 3. |
+
+Not a decision — a constraint both sessions inherit: **base is earned per session delivered, by whoever delivered it.** That rule is already in the schema (`sessions.substitute_facilitator_id`, A3's `20260829180000_cohort_creation_schema.sql`, whose comment quotes this exact sentence). A substitute is paid for the session they ran; the cohort's facilitator is not.
+
+The rate itself — dollars per session — is data on the agreement row, entered by an admin. No decision blocks the build (CLAUDE.md #10), only the first real row.
+
+**If decision 1 lands as recommended,** F3's PAYOUTS paragraph is amended to: *"Per period: sessions delivered, the rate applied, adjustments, total, and status. Show the inputs — session count and rate — as stored on the payout, never recomputed. Explain the model in one plain sentence: you are paid a fixed amount for each session you deliver, confirmed by your own session log."* The retained-revenue and first-month sentences are removed.
+
+## **Stream A — B1: Facilitator agreements**
+
+```
+Read CLAUDE.md, section 2 of f4milia-revenue-model.md (recovered onto
+main via PR #126), and the four decisions above before starting. Do
+not start until they are recorded here.
+
+Greptile-tier (supabase/migrations/**, app/admin/**). Merges at 09:30
+with Ivan present — compensation is the one KinKeepers surface where a
+silent error is a wrong payment, the same reasoning that gates
+F4milia's A5.
+
+Small session. B3's payout math is only as trustworthy as the
+agreement row it reads its rate from, so this session's whole job is
+making that row boring: append-only, non-overlapping, audited.
+
+TABLE: facilitator_agreements
+  id, facilitator_id → profiles (RESTRICT, not cascade — this is a
+  financial record; deletion-request fulfillment anonymizes a profile
+  with payment history, it never hard-deletes one, same as audit_log),
+  base_rate_cents int > 0, currency char(3) default 'USD',
+  effective_from date, effective_to date null (open-ended),
+  agreement_reference text (where the signed contract lives — a
+  pointer, never the document; no uploads), notes text, created_at.
+
+  No two agreements for one facilitator may overlap in time: an
+  EXCLUDE constraint on (facilitator_id, daterange(effective_from,
+  effective_to, '[)')) via btree_gist. The database enforces it, not
+  the form.
+
+  A rate change is a new row: end the current agreement (set
+  effective_to), create the next one. Never UPDATE base_rate_cents.
+  Same "history, not a mutable status" shape as
+  facilitator_certifications and member_consents — a payout row from
+  March must still point at the agreement that was in force in March.
+
+  If decision 1 = base + share: add share_rate numeric(5,4) here AND
+  stop. The retained-revenue source table does not exist in
+  KinKeepers, so that branch adds a session, not a column. Report it.
+
+FUNCTIONS (security definer, set search_path = '', record_audit_event
+in the same transaction, revoke execute from public/anon/authenticated,
+grant to service_role — the add_facilitator_certification pattern):
+  create_facilitator_agreement(actor_id, target_facilitator_id,
+    p_base_rate_cents, p_currency, p_effective_from, p_effective_to,
+    p_agreement_reference, p_notes) — refuses a non-facilitator
+    profile and an overlap, naming the agreement it overlaps.
+  end_facilitator_agreement(actor_id, agreement_id, p_effective_to) —
+    only on an open-ended row; effective_to may not precede
+    effective_from.
+  New audit_action values: facilitator_agreement_created,
+  facilitator_agreement_ended. Own migration (enum rule).
+
+RLS: revoke all from anon/authenticated first. A facilitator selects
+their own rows (F3 reads this). No policy for partner_staff — that
+they have no path to compensation data is proven by the RLS suite,
+not assumed. Admin reads and writes through the service-role client
+from a Server Action behind requireRole(["admin"]).
+
+ADMIN UI — a new Agreement section on /admin/facilitators/[id]:
+current agreement (rate, since when, reference), history below it,
+"New agreement" form, "End agreement" with a confirm dialog that
+names the end date. Density exemption applies. Copy in lib/copy.ts.
+
+TESTS
+pgTAP: overlap refused; adjacent (effective_to = next effective_from)
+accepted; a facilitator sees own rows only; a second facilitator sees
+none; anon sees none; partner_staff sees none; audit rows via the
+baseline-delta pattern, never an absolute count. Negative drill on
+each `revoke` line, not the `grant` lines (Learned Constraints,
+2026-09-02 L5). vitest on the Server Action: a member and a
+facilitator are refused before any write. Every migration adds its
+row to docs/migration-rollback-decisions.md in the same PR.
+
+Named edge case for the 09:30 review: create a second agreement
+overlapping the current one → refused, naming the overlap. End the
+current one first, then create the next → accepted. A session
+delivered in a gap between two agreements is B3's to surface, not
+this session's to prevent — confirm B3's prompt covers it before
+merging.
+
+Acceptance: overlap is impossible at the database level. A rate
+change leaves the old row intact and readable. Every write has an
+audit row. A facilitator can read their own agreement and nobody
+else's. No payout number appears anywhere yet.
+
+PR plan: (1) audit_action values; (2) table + constraint + functions +
+pgTAP; (3) Server Actions + admin section + copy + vitest. Each under
+200 lines. Migrations merge same-day.
+
+Commit: "feat: facilitator agreements"
+```
+
+## **Stream A — B3: Payout computation and reviewer release**
+
+```
+Read CLAUDE.md, B1 as merged, and X4's submit_session_log() before
+starting. Do not start until B1 has merged and decisions 2 and 3 are
+recorded.
+
+Greptile-tier; merges at 09:30 with Ivan present. Highest-stakes
+KinKeepers session after P1.
+
+THE BOUNDARY, STATED FIRST
+The payout for a session is base_rate_cents on the agreement in force
+on the day the session was scheduled — once and only once, for the
+person who delivered it. Nothing here estimates, prorates, rounds, or
+adjusts on its own. A reviewer releases; the system never does
+(invariant #11). Release is a status, not a transfer (decision 2).
+
+WHAT COUNTS AS A DELIVERED SESSION
+sessions.status <> 'cancelled' AND session_logs.delivery_confirmed =
+true for that session. Nothing else — not scheduled_at having passed,
+not attendance rows existing, not a Zoom report. The facilitator's own
+confirmed log is the evidence (invariant #7); X4 already made it the
+source of truth for attendance, and it is the source of truth here for
+the same reason.
+
+WHO DELIVERED IT
+coalesce(sessions.substitute_facilitator_id, cohorts.facilitator_id).
+Already the schema's stated rule. Do not re-decide it.
+
+TABLES
+  facilitator_payouts: id, facilitator_id → profiles (RESTRICT),
+    agreement_id → facilitator_agreements (RESTRICT), period_start,
+    period_end, currency, session_count int, rate_applied_cents int
+    (COPIED from the agreement at compute time — the agreement is
+    referenced for provenance and never joined for the number),
+    base_amount_cents int, adjustment_cents int default 0,
+    adjustment_reason text, total_cents int, status payout_status
+    (pending_review | released | void), computed_at, computed_by,
+    released_at, released_by, release_note text.
+    Partial UNIQUE (facilitator_id, period_start) where status =
+    'pending_review': one open statement per facilitator per period.
+    A session confirmed late, after that period's payout was released,
+    goes into a NEW pending row for the same period — it never reopens
+    the released one.
+
+  facilitator_payout_items: id, payout_id, session_id → sessions,
+    kind (session | reversal), amount_cents, reverses_item_id null.
+    Partial UNIQUE index on session_id where kind = 'session': a
+    delivered session enters a payout exactly once, ever, and the
+    database says so.
+
+FUNCTIONS (same security/audit/grant pattern as B1)
+  compute_facilitator_payouts(actor_id, p_period_start, p_period_end)
+    For every delivered session scheduled in the period with no
+    'session' item yet: find the deliverer, find their agreement in
+    force on scheduled_at::date, and either (a) add an item to that
+    facilitator's pending payout for the period, creating the row if
+    needed, or (b) return the session in an `uncovered` set — no
+    agreement covers it — for the reviewer, loudly. An uncovered
+    session is never paid at any rate and never silently skipped.
+    Idempotent: re-running for the same period adds only what the
+    unique index permits. One audit row (payout_computed) per payout
+    row created or extended, carrying the session ids added.
+  release_facilitator_payout(actor_id, payout_id, p_release_note)
+    pending_review → released only. Sets released_by/at. Audit row
+    (payout_released) carrying total_cents and session_count. The
+    release note is required, not optional — it is where the
+    out-of-band payment reference goes (decision 2), for the same
+    reason issueAdminSignInLink requires a reason.
+  void_facilitator_payout(actor_id, payout_id, p_reason)
+    pending_review → void only, and deletes its items so those
+    sessions are eligible for the next compute. Nothing was paid, so
+    nothing is reversed. A released payout can never be voided.
+  A trigger makes released payouts and their items immutable: any
+  UPDATE or DELETE raises. The March statement a facilitator saw is
+  the March statement forever.
+
+CORRECTIONS AFTER RELEASE
+X4's submit_session_log() can correct delivery_confirmed after the
+fact. When a session already inside a released payout is corrected to
+not-delivered, the next compute surfaces it as a reversal candidate
+alongside `uncovered`; the reviewer confirms it, and a 'reversal'
+item with a negative amount lands in the current period's pending
+payout, pointing at the item it reverses. Never automatic. The
+released row is unchanged byte-for-byte. (A session corrected the
+other way — newly confirmed — simply becomes eligible; no special
+path.)
+
+New audit_action values: payout_computed, payout_released,
+payout_voided. New enum payout_status. Own migration.
+
+RLS: revoke all from anon/authenticated. A facilitator selects their
+own payouts and items (F3 reads this). partner_staff: no path, proven.
+Admin through the service-role client behind requireRole(["admin"]).
+
+NO NEW ANALYTICS EVENT. P5's event list does not include payouts, and
+inventing one is inventing. audit_log is the record.
+
+NO BANK DETAILS. Do not add account numbers, routing numbers, or any
+payment-rail identifier to any table in this session. That is B2, and
+B2 does not exist.
+
+ADMIN UI — /admin/payouts:
+  Compute: pick a month, run. The result lists each facilitator's
+  pending payout (sessions, rate, total) and, ABOVE them, the
+  uncovered sessions and reversal candidates — those render first and
+  loudest, because they are the reviewer's actual job.
+  Release: per payout, a confirm dialog that says exactly what
+  happens: "Mark <name>'s <Month> payout of <amount> as released. This
+  records that payment was made outside KinKeepers; it does not move
+  money." Release note required.
+  History: released payouts by month, read-only, with items.
+  Density exemption applies. Copy in lib/copy.ts.
+
+TESTS
+pgTAP, all with real fixtures — a cohort, its facilitator, a
+substitute, agreements with real dates:
+  - a delivered session enters exactly one payout; a second 'session'
+    item for it fails on the index, not in application code
+  - a session delivered by the substitute pays the substitute at the
+    substitute's own rate, and adds nothing to the cohort facilitator
+  - delivery_confirmed = false → not paid; status = 'cancelled' → not
+    paid; a session with no covering agreement → in `uncovered`, in no
+    payout
+  - compute twice for one period → identical result, no duplicates
+  - rate_applied_cents equals the agreement's rate at compute time and
+    does not change when that agreement is later ended and replaced
+  - UPDATE on a released payout raises; DELETE on its item raises
+  - void deletes items; those sessions reappear on the next compute
+  - facilitator A sees A's payouts and none of B's; anon and
+    partner_staff see none
+  - audit rows via baseline-delta, never an absolute count
+  Negative drill on every `revoke` line. vitest on each Server Action:
+  role refusals before any write, and the release-note requirement.
+  Rollback-decisions rows for every migration.
+
+Named edge case for the 09:30 review: release a payout, then correct
+one of its sessions to not-delivered through the real facilitator
+session-log screen. The released row is unchanged (select it before
+and after; the diff is empty). The next compute lists that session as
+a reversal candidate; confirming it puts a negative item in the
+current month's pending payout. Nothing moved without the reviewer.
+
+Acceptance: a delivered session can never be paid twice — proven by a
+failing insert, not by application logic. The person paid is the
+person who delivered. A session no agreement covers is surfaced, not
+skipped or guessed. Released payouts are immutable. Every state change
+has an audit row. Release moves no money and says so on screen. A
+facilitator can read only their own payouts.
+
+PR plan: (1) payout_status enum + audit_action values; (2) tables +
+indexes + compute function + pgTAP; (3) release/void functions +
+immutability trigger + pgTAP; (4) Server Actions + /admin/payouts +
+copy + vitest. Each under 200 lines. Migrations merge same-day.
+
+Commit: "feat: facilitator payouts, computed once, released by a reviewer"
+```
+
+**After both merge:** A4-payouts and F3 unpark. A4-payouts shrinks — B1 already puts the agreement section on the facilitator's admin page, so what remains is the read-only per-facilitator payout history on that same page, with no release action (release lives on /admin/payouts). F3 is unchanged except its compensation paragraph, per decision 1.
