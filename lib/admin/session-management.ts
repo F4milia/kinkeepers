@@ -7,7 +7,7 @@ import { requireRole } from "@/lib/auth/roles";
 import { rescheduleMeetingOccurrence, cancelMeetingOccurrence } from "@/lib/zoom/meeting";
 import { getDefaultZoomCredentials, type ZoomCredentials } from "@/lib/zoom/client";
 import { notifySessionRescheduled, notifySessionCancelled } from "@/lib/messaging/session-notifications";
-import { logError } from "@/lib/log";
+import { notifyBestEffort } from "@/lib/messaging/notify-best-effort";
 
 export type SessionMutationResult =
   | { success: true }
@@ -56,19 +56,6 @@ async function lookUpSessionVideoDetails(admin: SupabaseClient, sessionId: strin
       cohortTimeZone: (data.cohorts as unknown as { time_zone: string } | null)?.time_zone ?? "UTC",
     },
   };
-}
-
-/**
- * Member notification is best-effort - a failure here must never undo
- * or mask an already-successful reschedule/cancellation. Errors are
- * logged, not surfaced to the admin as a failure of the action itself.
- */
-async function notifyBestEffort(sendNotification: () => Promise<void>, logContext: Record<string, string>): Promise<void> {
-  try {
-    await sendNotification();
-  } catch {
-    logError("session_notification_failed", logContext);
-  }
 }
 
 export async function rescheduleSessionAction(
@@ -120,6 +107,7 @@ export async function rescheduleSessionAction(
         session.cohortTimeZone,
         session.videoJoinUrl,
       ),
+    "session_notification_failed",
     { session_id: sessionId, cohort_id: session.cohortId },
   );
 
@@ -168,6 +156,7 @@ export async function cancelSessionAction(
   await notifyBestEffort(
     () =>
       notifySessionCancelled(admin, session.cohortId, sessionId, new Date(session.scheduledAt), session.cohortTimeZone),
+    "session_notification_failed",
     { session_id: sessionId, cohort_id: session.cohortId },
   );
 

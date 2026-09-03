@@ -3,6 +3,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { requireRole } from "@/lib/auth/roles";
+import { isSessionPast } from "@/lib/data";
 
 export interface CohortDeliverySummary {
   id: string;
@@ -62,10 +63,13 @@ export interface UnloggedPastSession {
  * session that already happened. Two-query-then-filter-in-JS, same
  * pattern as getCohortDeliverySummary above (no reusable admin-reporting
  * aggregate exists yet, and row counts are small at this project's
- * scale). `sessions.status` never transitions to anything but
- * 'scheduled'/'cancelled' anywhere in this codebase (confirmed by grep -
- * nothing sets 'completed') - so "past" is determined by scheduled_at
- * alone, not by status.
+ * scale). Pre-filtered to `status = 'scheduled'` at the DB level - a
+ * cancelled session never needs a log (A3: "a cancelled session is our
+ * failure, not the member's absence") - then "past" is resolved via
+ * lib/data.ts's isSessionPast(), the same single source of truth
+ * getUpcomingSession()/getFacilitatorSessionsNeedingLog() use, rather
+ * than re-deriving and re-explaining the same scheduled_at-vs-status
+ * rule a second time here.
  */
 export async function getUnloggedPastSessions(callerClient?: SupabaseClient): Promise<UnloggedPastSession[]> {
   const supabase = callerClient ?? (await createClient());
@@ -74,9 +78,8 @@ export async function getUnloggedPastSessions(callerClient?: SupabaseClient): Pr
   const [{ data: sessions, error: sessionsError }, { data: logs, error: logsError }] = await Promise.all([
     supabase
       .from("sessions")
-      .select("id, cohort_id, session_number, scheduled_at, cohorts(name)")
-      .eq("status", "scheduled")
-      .lt("scheduled_at", new Date().toISOString()),
+      .select("id, cohort_id, session_number, scheduled_at, status, cohorts(name)")
+      .eq("status", "scheduled"),
     supabase.from("session_logs").select("session_id"),
   ]);
   if (sessionsError) throw sessionsError;
@@ -85,7 +88,7 @@ export async function getUnloggedPastSessions(callerClient?: SupabaseClient): Pr
   const loggedSessionIds = new Set(logs.map((log) => log.session_id));
 
   return sessions
-    .filter((session) => !loggedSessionIds.has(session.id))
+    .filter((session) => isSessionPast(session.status, session.scheduled_at) && !loggedSessionIds.has(session.id))
     .map((session) => ({
       id: session.id,
       cohortId: session.cohort_id,

@@ -42,6 +42,7 @@ export async function markCohortCompletedAction(
 
   await notifyBestEffort(
     () => notifyProgramComplete(admin, cohortId, programName),
+    "applicant_notification_failed",
     { cohort_id: cohortId },
   );
 

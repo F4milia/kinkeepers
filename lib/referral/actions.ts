@@ -205,6 +205,7 @@ export async function completeIntake(resumeToken: string): Promise<CompleteIntak
   // for reschedule/cancel notifications.
   await notifyBestEffort(
     () => notifyApplicationReceived(admin, data.id),
+    "applicant_notification_failed",
     { applicant_id: data.id },
   );
 

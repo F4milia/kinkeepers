@@ -2,21 +2,24 @@ import "server-only";
 import { logError } from "@/lib/log";
 
 /**
- * A notification failure must never fail the mutation it's attached to -
- * same reasoning and same shape as lib/admin/session-management.ts's own
- * private copy of this wrapper (P4). Kept as a small shared helper here
- * rather than duplicated a third time, since X3 needs it in three
- * separate action files; session-management.ts's own copy is left
- * untouched rather than refactored to import this one, to avoid an
- * unrelated edit to another session's already-shipped file.
+ * A notification failure must never fail the mutation it's attached to.
+ * `logEvent` is explicit at every call site (not hardcoded here) because
+ * this wrapper is shared across genuinely different notification
+ * categories with their own established structured-log event names -
+ * e.g. "applicant_notification_failed" for X3's applicant-lifecycle
+ * messages, "session_notification_failed" for P4's reschedule/cancel
+ * notices (formerly a separate, byte-for-byte identical private copy in
+ * lib/admin/session-management.ts, consolidated here since nothing about
+ * the duplication was actually session-management-specific).
  */
 export async function notifyBestEffort(
   sendNotification: () => Promise<void>,
+  logEvent: string,
   logContext: Record<string, string>,
 ): Promise<void> {
   try {
     await sendNotification();
   } catch {
-    logError("applicant_notification_failed", logContext);
+    logError(logEvent, logContext);
   }
 }

@@ -76,6 +76,23 @@ reset role;
 -- ---------------------------------------------------------------------
 set local role service_role;
 
+-- Baseline before this test's own fixture ever submits anything.
+-- attendance_rate_by_session_number is a deliberately GLOBAL,
+-- cross-cohort aggregate (P5: "where in the program people drop") - it
+-- is not scoped to this test's own cohort, so asserting it equals a
+-- fixed absolute number (e.g. "0") is exactly the fragile pattern
+-- CLAUDE.md's own Learned Constraints (2026-08-28, audit_log) already
+-- warns against: a real vitest integration test run against this same
+-- local database beforehand, without a reset in between, commits real
+-- session_attended/session_missed events through the actual app code
+-- path (not pgTAP's own rolled-back transaction), which would inflate
+-- this exact count and fail an absolute-value assertion for a reason
+-- that has nothing to do with this test's own correctness. Baseline-
+-- delta, same as audit_baseline below, makes the regression assertion
+-- correct regardless of what else is in the table.
+create temporary table attendance_rate_baseline as
+  select coalesce((select attended_count::int from attendance_rate_by_session_number where session_number = 1), 0) as n;
+
 select lives_ok(
   format(
     $$ select submit_session_log(%L, '55555555-0000-0000-0000-000000000601', true, 'Good session', '[
@@ -179,11 +196,13 @@ select ok(
 -- FINAL status is excused (not the stale original present) - P5's
 -- attendance_rate_by_session_number/retention_at_session must reflect
 -- that, not double-count the superseded event still sitting in the
--- append-only log. Both members' final status for session_number 1 is a
--- non-attended one (excused, absent) - attended_count/retained_count
--- must both be zero, not 1 (which is what the pre-fix version returned).
+-- append-only log. Delta against the pre-test baseline, not an absolute
+-- value (see attendance_rate_baseline's own comment above) - member
+-- 601's net contribution to session_number 1's attended_count must be
+-- back to zero after the correction, not left at +1 (which is what the
+-- pre-fix version returned: the stale present event still counted).
 select is(
-  (select attended_count::int from attendance_rate_by_session_number where session_number = 1),
+  (select attended_count::int from attendance_rate_by_session_number where session_number = 1) - (select n from attendance_rate_baseline),
   0,
   'attendance_rate_by_session_number counts member 601''s FINAL status (excused), not the stale superseded present event'
 );
