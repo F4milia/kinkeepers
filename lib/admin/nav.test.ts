@@ -22,9 +22,9 @@ describe("navItemsForRole", () => {
     expect(items[0].label("facilitator")).toBe("My cohorts");
   });
 
-  it("shows partner staff cohorts and reports, but not partner organizations", () => {
+  it("shows partner staff refer/cohorts/reports, but not partner organizations", () => {
     const items = navItemsForRole("partner_staff");
-    expect(items.map((item) => item.href)).toEqual(["/admin/cohorts", "/admin/reports"]);
+    expect(items.map((item) => item.href)).toEqual(["/admin/refer", "/admin/cohorts", "/admin/reports"]);
     expect(items.find((item) => item.href === "/admin/cohorts")!.label("partner_staff")).toBe(
       "Cohorts",
     );
