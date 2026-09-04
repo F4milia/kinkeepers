@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { createCohortAction, type CreateCohortInput } from "@/lib/admin/cohort-creation";
 import type { SelectableProgram, SelectableFacilitator } from "@/lib/admin/cohorts";
+import type { PartnerOrganization } from "@/lib/admin/partner-organizations";
 import { Button } from "@/components/ui/button";
 
 const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
@@ -14,9 +15,11 @@ const FIELD_CLASSES =
 export function CohortCreationForm({
   programs,
   facilitators,
+  partnerOrganizations,
 }: {
   programs: SelectableProgram[];
   facilitators: SelectableFacilitator[];
+  partnerOrganizations: PartnerOrganization[];
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -28,6 +31,7 @@ export function CohortCreationForm({
     groupingDescription: "",
     programId: programs[0]?.id ?? "",
     facilitatorId: facilitators[0]?.id ?? "",
+    partnerOrganizationId: "",
     cadence: "weekly" as CreateCohortInput["cadence"],
     meetingDayOfWeek: 2,
     meetingTime: "18:30",
@@ -44,7 +48,10 @@ export function CohortCreationForm({
     setError(null);
     setZoomWarning(null);
     startTransition(async () => {
-      const result = await createCohortAction(form);
+      const result = await createCohortAction({
+        ...form,
+        partnerOrganizationId: form.partnerOrganizationId || undefined,
+      });
       if (!result.success) {
         setError(result.error);
         return;
@@ -137,6 +144,29 @@ export function CohortCreationForm({
             </option>
           ))}
         </select>
+      </div>
+
+      <div className="flex flex-col gap-2">
+        <label htmlFor="partnerOrganizationId" className="text-label font-ui text-ink">
+          Partner organization (optional)
+        </label>
+        <select
+          id="partnerOrganizationId"
+          value={form.partnerOrganizationId}
+          onChange={(e) => setForm({ ...form, partnerOrganizationId: e.target.value })}
+          className={FIELD_CLASSES}
+        >
+          <option value="">None - KinKeepers direct</option>
+          {partnerOrganizations.map((org) => (
+            <option key={org.id} value={org.id}>
+              {org.name}
+            </option>
+          ))}
+        </select>
+        <p className="text-meta font-ui text-ink-soft">
+          If this partner has its own Zoom credentials on file, sessions use those instead of the
+          default account.
+        </p>
       </div>
 
       <div className="flex gap-4">
