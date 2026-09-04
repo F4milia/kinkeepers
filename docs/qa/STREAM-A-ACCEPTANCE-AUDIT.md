@@ -22,7 +22,7 @@ decided scope cut - not a gap)
 Order matches the run doc's own wave order for Stream A: P1, P2, A1, A2, A3,
 P4-pre, P4, P5, A5, L5, X4, R1.
 
-A3 done as of 2026-09-05. Remaining: P4-pre, P4, P5, A5, L5, X4, R1.
+A3 done as of 2026-09-05. P4-pre done as of 2026-09-05. Remaining: P4, P5, A5, L5, X4, R1.
 
 ---
 
@@ -148,3 +148,16 @@ values anywhere — grep to confirm."*
 **Note on local testing:** `supabase/seed.sql` deliberately seeds zero `license_status = 'licensed'` programs (accurate real-world state, per that file's own comment - no licensing deal has been signed yet), which made the cohort-creation form entirely unreachable via seed data alone. Verification instead used a temporary, local-only `license_status` flip on one program via the admin client for the duration of each test script, reverted immediately after - never touching staging or production, per the standing test-data rule.
 
 **Verdict: two real bugs found and fixed - a missing required UI field with fully-built/tested backend support, and a serious uncaught-crash bug that could leave an admin unsure whether a cohort was created after a Zoom failure. One item stays 🚩 FLAGGED, carried forward from Stream B's own P3 audit and the 2026-09-03 CLAUDE.md entry rather than re-flagged as new - the screen-share-host-only Zoom setting, sent to Ivan for confirmation 2026-09-05, still awaiting his reply. Reschedule, substitute, and session-count-from-program were already correctly built and well-tested.**
+
+---
+
+## P4-pre: Notification preference migration — audited 2026-09-05
+
+No literal "Acceptance:" line - this is a standalone, migration-only session ("Single migration, nothing else"). Treating its own spec text as the checkable requirement, verbatim: *"the notification-preference column/table that L3 writes and P4 reads. Channel: email, SMS, or both. Default both."*
+
+| # | Requirement | Status | Evidence |
+|---|---|---|---|
+| 1 | Column/table exists, written by L3, read by P4 | ✅ PASS | `applicants.preferred_contact_channel` (`contact_channel` enum: `email`/`sms`/`both`), written by L3's account screen (`lib/account/actions.ts`) and the intake form, read by P4's messaging pipeline (`lib/messaging/session-notifications.ts`, `lib/messaging/applicant-notifications.ts`). |
+| 2 | Default both | 🔧 FIXED | Real, current, deliberately-built contradiction: the original migration never set a default on the column, and the intake form's own step-3 contact-preference control is optional - nothing requires a caregiver to touch it before completing intake, and the initial applicant-insert (`lib/referral/actions.ts`) never sets this field at all. Any applicant who never touches that control got `NULL`, not `'both'`. Worse, `lib/messaging/notify-member.ts` then treated that `NULL` as **"email only"** - a documented, deliberate design decision with its own passing test ("defaults to email only when no preference was ever recorded"), directly contradicting both P4-pre's own spec ("Default both") and P4's own body text ("Default to both for the first cohort - we will learn what works"). `supabase/seed.sql`'s fixtures always set this column explicitly, which is why no click-through against seed data ever surfaced it. Fixed with a new migration (`20260905140000_default_contact_channel_both.sql`: sets the column default to `'both'`, backfills existing `NULL` rows, and adds `NOT NULL` so the gap can't recur), plus updated `notify-member.ts`'s defensive null-handling to match the documented default instead of silently diverging from it, and corrected the test that had encoded the wrong behavior (now "defaults to both channels when no preference was ever recorded"). Verified with a new pgTAP assertion (`referral_intake_schema.sql`) proving an applicant insert with no explicit preference gets `'both'` from the column's own default, not from any application-code fallback. |
+
+**Verdict: one real bug found and fixed - the column's stated default was never actually implemented at the DB level, and the application layer had been deliberately, explicitly built and tested to do the opposite of what both P4-pre and P4's own prompt text require. A real caregiver who never touched an optional radio button during intake was silently getting email-only reminders instead of the documented both-channel default.**
