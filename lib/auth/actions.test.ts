@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { requestEmailLink } from "@/lib/auth/actions";
+import { getRequestOrigin, requestEmailLink } from "@/lib/auth/actions";
 
 // Mocked rather than run against the real local stack (this codebase's
 // usual preference) because the bug being fixed is specifically about
@@ -37,9 +37,6 @@ describe("requestEmailLink", () => {
     headersGet.mockImplementation((name: string) =>
       name === "host" ? "kinkeepers-git-main-developer-4044s-projects.vercel.app" : null,
     );
-    const originalEnv = process.env.NODE_ENV;
-    // @ts-expect-error - test-only override of a normally-readonly value
-    process.env.NODE_ENV = "production";
 
     await requestEmailLink("caregiver@example.com");
 
@@ -49,16 +46,10 @@ describe("requestEmailLink", () => {
         emailRedirectTo: "https://kinkeepers-git-main-developer-4044s-projects.vercel.app/auth/callback",
       },
     });
-
-    // @ts-expect-error - restoring the test-only override above
-    process.env.NODE_ENV = originalEnv;
   });
 
   it("uses a different host correctly - the redirect always matches whatever deployment made the request", async () => {
     headersGet.mockImplementation((name: string) => (name === "host" ? "kinkeepers.vercel.app" : null));
-    const originalEnv = process.env.NODE_ENV;
-    // @ts-expect-error - test-only override of a normally-readonly value
-    process.env.NODE_ENV = "production";
 
     await requestEmailLink("caregiver@example.com");
 
@@ -66,8 +57,44 @@ describe("requestEmailLink", () => {
       email: "caregiver@example.com",
       options: { emailRedirectTo: "https://kinkeepers.vercel.app/auth/callback" },
     });
+  });
+});
 
-    // @ts-expect-error - restoring the test-only override above
-    process.env.NODE_ENV = originalEnv;
+// Direct coverage for the protocol-selection bug found during the
+// 2026-09-04 acceptance-criteria audit (A1): a locally run PRODUCTION
+// build (`next build && next start`, exactly what playwright.config.ts's
+// e2e webServer runs) has NODE_ENV === "production" same as a real
+// deployment, but no TLS - the previous NODE_ENV-only check produced
+// `https` for it anyway, and GoTrue would redirect to a URL nothing was
+// listening on. Real Vercel traffic always carries `x-forwarded-proto`;
+// this is what a local server (dev OR a locally-run production build)
+// never has, which is the actual distinguishing signal, not NODE_ENV.
+describe("getRequestOrigin", () => {
+  beforeEach(() => {
+    headersGet.mockReset();
+  });
+
+  it("prefers x-forwarded-proto when present, regardless of host", async () => {
+    headersGet.mockImplementation((name: string) => {
+      if (name === "host") return "kinkeepers.vercel.app";
+      if (name === "x-forwarded-proto") return "https";
+      return null;
+    });
+    expect(await getRequestOrigin()).toBe("https://kinkeepers.vercel.app");
+  });
+
+  it("falls back to http for a local host with no forwarded-proto header - a locally run production build included", async () => {
+    headersGet.mockImplementation((name: string) => (name === "host" ? "127.0.0.1:3000" : null));
+    expect(await getRequestOrigin()).toBe("http://127.0.0.1:3000");
+  });
+
+  it("falls back to http for localhost specifically, not just 127.0.0.1", async () => {
+    headersGet.mockImplementation((name: string) => (name === "host" ? "localhost:3000" : null));
+    expect(await getRequestOrigin()).toBe("http://localhost:3000");
+  });
+
+  it("falls back to https for a real, non-local host with no forwarded-proto header", async () => {
+    headersGet.mockImplementation((name: string) => (name === "host" ? "kinkeepers.vercel.app" : null));
+    expect(await getRequestOrigin()).toBe("https://kinkeepers.vercel.app");
   });
 });
