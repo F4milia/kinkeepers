@@ -52,6 +52,15 @@ jobs:
           # Not a real secret - CI only hashes localhost's own IP during
           # these tests, nothing persisted beyond the ephemeral runner.
           AUTH_IP_HASH_SECRET: ci-only-not-a-real-secret-0000000000000000
+          # X1's staging-guard now covers requestEmailLink/requestSmsCode
+          # too (see lib/messaging/staging-guard.ts's Learned Constraints
+          # entry) - without this, e2e/helpers/sign-in.ts's real magic-link
+          # sign-in is blocked outright (APP_ENV isn't "production" here),
+          # and no email ever reaches Mailpit. @example.com is the one
+          # domain IANA reserves for exactly this (RFC 2606), matched by
+          # the allowlist's own leading-@ domain-suffix support - never a
+          # real caregiver's address.
+          STAGING_MESSAGE_ALLOWLIST: "@example.com"
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
