@@ -22,6 +22,8 @@ decided scope cut - not a gap)
 Order matches the run doc's own wave order for Stream A: P1, P2, A1, A2, A3,
 P4-pre, P4, P5, A5, L5, X4, R1.
 
+A3 done as of 2026-09-05. Remaining: P4-pre, P4, P5, A5, L5, X4, R1.
+
 ---
 
 ## P1: Passwordless authentication — audited 2026-09-04
@@ -120,3 +122,29 @@ against seed data. Grep confirms no matching algorithm exists."*
 **Also found and fixed, from the prompt's own body text (not the literal acceptance line):** the review queue's required field list ("first name, relationship, care recipient stage, time zone, **availability**, referral source, days waiting") was missing `availability_windows` entirely - a real, correctly-stored column that was never selected or rendered anywhere, on either the queue list or the assignment/detail page. A reviewer had no way to see when an applicant said they were free while judging which cohort's meeting time would actually work for them - the exact mismatch A2's own "6:30 PM Eastern is useless to someone in Honolulu" reasoning was written to prevent, just from the other direction. Fixed by adding the field to the shared types, selecting it in all three query functions, and rendering it on both screens with the intake form's own existing copy (no new copy invented). Verified live: a real applicant with real availability values, confirmed the exact rendered text on both screens via a real signed-in admin session.
 
 **Verdict: one real gap found and fixed (a required review-queue field that was silently never wired up). Everything else - ordering, timezone display, the assignment/audit/event chain, waitlist grouping, and the no-auto-matcher boundary - was already correctly built and well-tested. PR #135, open for review.**
+
+---
+
+## A3: Cohort creation and session scheduling — audited 2026-09-04/05
+
+Acceptance (verbatim): *"creating a cohort produces the correct number of
+sessions for the selected program, with Zoom meetings carrying all
+enforced settings. Failed Zoom creation leaves the cohort in draft with a
+visible error. Rescheduling updates Zoom. A substituted session records
+the substitute. Changing programs changes session count with no hardcoded
+values anywhere — grep to confirm."*
+
+| # | Criterion | Status | Evidence |
+|---|---|---|---|
+| 1 | Correct number of sessions for the selected program | ✅ PASS | `lib/admin/cohort-creation.test.ts` - session count comes from `program.session_count`, read fresh per call, never hardcoded. |
+| 2 | Zoom meetings carry all enforced settings | ⚠️ DEFERRED, not a new gap | 4 of 5 (`auto_recording: none`, `waiting_room: true`, `join_before_host: false`, an explicit password) are sent via Zoom's documented meeting-creation API, per `lib/zoom/meeting.ts`. Screen-share-host-only is **not** a per-meeting Create Meeting field per Zoom's own developer forum - already found and documented by Stream B's P3 audit and the 2026-09-03 "Real run doc reconciliation" CLAUDE.md entry. Needs Ivan's confirmation or a live-credential check, not something either stream can close alone. Cross-referenced here, not re-flagged as new. |
+| 3 | Failed Zoom creation leaves the cohort in draft with a visible error | 🔧 FIXED | Real, current bug: `resolveZoomCredentialsForPartner()` (which calls `getDefaultZoomCredentials()`, throwing synchronously whenever `ZOOM_ACCOUNT_ID`/`ZOOM_CLIENT_ID`/`ZOOM_CLIENT_SECRET` aren't set - a real condition, not hypothetical, matching error text already seen in real `audit_log` rows) was called **outside** `createCohortAction()`'s try/catch. The throw was completely uncaught, crashing the whole Server Action with a generic error page - even though the cohort's own `draft` row had already committed moments earlier, leaving an admin looking at a crash with no way to tell the cohort already existed. Fixed by moving credential resolution inside the try block (`lib/admin/cohort-creation.ts`). Verified live with a real Playwright run against a real admin sign-in with no Zoom credentials configured: the cohort now lands on `/admin/cohorts/[id]` in `draft` status with "Zoom setup failed: Missing Zoom Server-to-Server OAuth credentials..." rendered on the page, no crash. Added a regression test (`lib/admin/cohort-creation.test.ts`, "a missing default Zoom credential is caught, not thrown uncaught") that exercises the exact code path the existing tests never did - every prior Zoom-failure test injects its own `zoomCredentials` override, which bypasses `resolveZoomCredentialsForPartner()`/`getDefaultZoomCredentials()` entirely. |
+| 4 | Rescheduling updates Zoom | ✅ PASS | `lib/admin/session-management.test.ts` - updates the Zoom occurrence, notifies members, and does not reschedule the DB row if the Zoom call fails. |
+| 5 | A substituted session records the substitute | ✅ PASS | Same file - "records a substitute facilitator without calling Zoom, leaving the cohort's own facilitator untouched." |
+| 6 | Changing programs changes session count, no hardcoded values, grep to confirm | ✅ PASS | Clean grep across `app/`, `components/`, `lib/` for a literal session-count number outside of test fixtures/seed data - `program.session_count` and `program.session_duration_minutes` drive both meeting creation and the finalize step. |
+
+**Also found and fixed, from the prompt's own body text (not the literal acceptance line):** the CREATE COHORT form's required field list includes "partner organization (optional)," but `components/admin/cohort-creation-form.tsx` had no field, no state key, and no prop for it at all - despite `createCohortAction`'s `CreateCohortInput.partnerOrganizationId` and `resolveZoomCredentialsForPartner()` being fully built and tested (`lib/admin/cohort-creation.test.ts`: "a cohort assigned to a partner with its own Zoom credentials uses them, not the default account"). The exact same "backend/tests complete, UI never wired" shape as P2's staff-referral screen and A1's discussion-content statement. Fixed by adding a "Partner organization" `<select>` (active partners only, same reasoning as licensed-only programs), wiring `app/admin/cohorts/new/page.tsx` to fetch and pass them. Verified live: selecting a real seeded partner organization correctly stored `partner_organization_id` on the created cohort.
+
+**Note on local testing:** `supabase/seed.sql` deliberately seeds zero `license_status = 'licensed'` programs (accurate real-world state, per that file's own comment - no licensing deal has been signed yet), which made the cohort-creation form entirely unreachable via seed data alone. Verification instead used a temporary, local-only `license_status` flip on one program via the admin client for the duration of each test script, reverted immediately after - never touching staging or production, per the standing test-data rule.
+
+**Verdict: two real bugs found and fixed - a missing required UI field with fully-built/tested backend support, and a serious uncaught-crash bug that could leave an admin unsure whether a cohort was created after a Zoom failure. One already-known, cross-stream-documented Zoom-settings limitation carried forward, not re-flagged. Reschedule, substitute, and session-count-from-program were already correctly built and well-tested.**
