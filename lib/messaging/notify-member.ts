@@ -169,3 +169,39 @@ export async function notifyMember({
 
   await Promise.all(sends);
 }
+
+export interface ApplicantContactRow {
+  contact: MemberContact;
+  timeZone: string | null;
+  unsubscribeToken: string;
+}
+
+/**
+ * Single-applicant contact lookup, shared by every notification path
+ * that targets exactly one known applicant (X3's lifecycle messages,
+ * P4's missed-session follow-up) rather than a cohort roster (P4's
+ * session-wide reminders/reschedule/cancellation use
+ * session-notifications.ts's own listEnrolledMembers instead). Moved
+ * here from applicant-notifications.ts (2026-09-05 P4 gap-closure) so
+ * session-notifications.ts can use it too without a circular import -
+ * applicant-notifications.ts already imports FROM session-notifications.ts.
+ */
+export async function getApplicantContact(admin: SupabaseClient, applicantId: string): Promise<ApplicantContactRow | null> {
+  const { data, error } = await admin
+    .from("applicants")
+    .select("email, phone, preferred_contact_channel, time_zone, notification_unsubscribe_token, notifications_opted_out")
+    .eq("id", applicantId)
+    .maybeSingle();
+  if (error) throw error;
+  // Same "an opted-out member simply never appears" contract as
+  // listEnrolledMembers (session-notifications.ts) - checked explicitly
+  // here rather than in a where clause, since this looks up exactly one
+  // known applicant rather than filtering a cohort roster.
+  if (!data || data.notifications_opted_out) return null;
+
+  return {
+    contact: { email: data.email, phone: data.phone, preferredContactChannel: data.preferred_contact_channel },
+    timeZone: data.time_zone,
+    unsubscribeToken: data.notification_unsubscribe_token,
+  };
+}

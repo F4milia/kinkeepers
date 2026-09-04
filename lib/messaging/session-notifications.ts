@@ -1,6 +1,6 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { notifyMember, type MemberContact } from "@/lib/messaging/notify-member";
+import { notifyMember, getApplicantContact, type MemberContact } from "@/lib/messaging/notify-member";
 import { formatMeetingTime } from "@/lib/admin/cohort-meeting-time";
 import { COPY } from "@/lib/copy";
 
@@ -146,4 +146,92 @@ export async function notifySessionCancelled(
       });
     }),
   );
+}
+
+/**
+ * P4's own actual schedule (24 hours before / 1 hour before a session) -
+ * found missing entirely during a 2026-09-05 acceptance audit; every
+ * merged P4 PR built the generic send mechanism and reschedule/
+ * cancellation notifications instead of this. The run doc's own sample
+ * text ("Your KinKeepers session starts in 1 hour. Join: [link]. Or call
+ * 1-800-XXX-XXXX.") is used verbatim for the 1-hour message; the 24-hour
+ * one matches the same voice. No health information, same restraint as
+ * every other message in this file.
+ *
+ * The dedup key includes the session's own CURRENT instant, same
+ * reasoning as notifySessionRescheduled above - if a session is
+ * rescheduled after its 24h/1h reminder already fired for the old time,
+ * the new time is a genuinely different notification, not a duplicate
+ * of one that already went out for a time that no longer applies.
+ */
+export async function notifySessionReminder(
+  admin: SupabaseClient,
+  cohortId: string,
+  sessionId: string,
+  sessionInstant: Date,
+  cohortTimeZone: string,
+  joinUrl: string | null,
+  reminderType: "24h" | "1h",
+): Promise<void> {
+  const members = await listEnrolledMembers(admin, cohortId);
+  const hoursLabel = reminderType === "24h" ? "24 hours" : "1 hour";
+
+  await Promise.all(
+    members.map(({ applicantId, contact, timeZone, unsubscribeToken }) => {
+      const timeDescription = describeInstantForMember(sessionInstant, timeZone, cohortTimeZone);
+      const joinLine = joinUrl ? ` Join: ${joinUrl}.` : "";
+      return notifyMember({
+        admin,
+        applicantId,
+        notificationType: `session_reminder_${reminderType}`,
+        dedupKey: `${applicantId}:session_reminder_${reminderType}:${sessionId}:${sessionInstant.toISOString()}`,
+        contact,
+        subject: `KinKeepers: your session starts in ${hoursLabel}`,
+        emailHtml: `<p>Your KinKeepers session starts in ${hoursLabel}: ${timeDescription}.${joinLine}</p><p>Questions? Call ${COPY.support.phoneNumber}.</p>${unsubscribeLine(unsubscribeToken)}`,
+        smsBody: `Your KinKeepers session starts in ${hoursLabel}.${joinLine} Or call ${COPY.support.phoneNumber}. Reply STOP to stop texts.`,
+        logContext: { applicant_id: applicantId, cohort_id: cohortId, session_id: sessionId, notification: `session_reminder_${reminderType}` },
+      });
+    }),
+  );
+}
+
+/**
+ * P4's own missed-session follow-up - the run doc's own quoted text
+ * verbatim: "We missed you Tuesday. The group meets again next week at
+ * the same time." No guilt, no urgency, no streak language, no question
+ * demanding a reply, per the prompt's own explicit requirement.
+ *
+ * The day name renders in the COHORT's own zone, not the member's -
+ * every enrolled member missed the same shared calendar session, so one
+ * day name is accurate for all of them (unlike a specific time, which
+ * genuinely does vary by member zone elsewhere in this file). Per-
+ * applicant, not per-cohort, since only confirmed-absent members ever
+ * reach this function (the caller queries session_attendance first) -
+ * uses getApplicantContact (notify-member.ts), the same single-applicant
+ * lookup X3's lifecycle messages already use, not listEnrolledMembers.
+ */
+export async function notifyMissedSession(
+  admin: SupabaseClient,
+  applicantId: string,
+  sessionId: string,
+  cohortId: string,
+  sessionInstant: Date,
+  cohortTimeZone: string,
+): Promise<void> {
+  const applicant = await getApplicantContact(admin, applicantId);
+  if (!applicant) return;
+
+  const dayName = new Intl.DateTimeFormat("en-US", { weekday: "long", timeZone: cohortTimeZone }).format(sessionInstant);
+
+  await notifyMember({
+    admin,
+    applicantId,
+    notificationType: "missed_session_followup",
+    dedupKey: `${applicantId}:missed_session_followup:${sessionId}`,
+    contact: applicant.contact,
+    subject: "KinKeepers: we missed you",
+    emailHtml: `<p>We missed you ${dayName}. The group meets again next week at the same time.</p>${unsubscribeLine(applicant.unsubscribeToken)}`,
+    smsBody: `KinKeepers: we missed you ${dayName}. The group meets again next week at the same time. Reply STOP to stop texts.`,
+    logContext: { applicant_id: applicantId, cohort_id: cohortId, session_id: sessionId, notification: "missed_session_followup" },
+  });
 }
