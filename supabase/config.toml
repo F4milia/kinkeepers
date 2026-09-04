@@ -160,7 +160,23 @@ site_url = "http://127.0.0.1:3000"
 # The public URL that Auth serves on. Defaults to the API external URL with `/auth/v1` appended.
 # external_url = ""
 # A list of *exact* URLs that auth providers are permitted to redirect to post authentication.
-additional_redirect_urls = ["https://127.0.0.1:3000"]
+#
+# Bug found during a 2026-09-04 acceptance-criteria audit of P1: this list
+# (and site_url above) previously held only bare origins - no
+# "/auth/callback" path at all, and the wrong protocol (https on a local
+# http server). A real magic-link sign-in's redirect_to is always
+# "<origin>/auth/callback" (lib/auth/actions.ts's requestEmailLink), which
+# matched neither entry, so GoTrue silently substituted site_url instead -
+# landing the browser on "/" with the code parameter never processed by
+# our callback route, and no error shown at all. Verified end to end with
+# a real magic-link click through Mailpit before and after this fix -
+# before: silently dumped to /sign-in via "/" with no error; after: lands
+# on the correct role home. Both 127.0.0.1 and localhost are listed since
+# a developer may access the local dev server via either.
+additional_redirect_urls = [
+  "http://127.0.0.1:3000/auth/callback",
+  "http://localhost:3000/auth/callback",
+]
 # How long tokens are valid for, in seconds. Defaults to 3600 (1 hour), maximum 604,800 (1 week).
 jwt_expiry = 3600
 # JWT issuer URL. If not set, defaults to auth.external_url.
@@ -235,11 +251,32 @@ otp_length = 6
 # Number of seconds before the email OTP expires (defaults to 1 hour).
 otp_expiry = 3600
 
-# Use a production-ready SMTP server. Matches the hosted project's config
-# (P1 PR4) - Resend, on the one verified sending domain currently
-# available (signalpath.brandlamb.com; not a kinkeepers.* domain yet).
+# Bug found during a 2026-09-04 acceptance-criteria audit of P1: this
+# block is written as documentation of what the HOSTED project's SMTP
+# should be (Resend, on the one verified sending domain currently
+# available - signalpath.brandlamb.com, not a kinkeepers.* domain yet),
+# but `enabled = true` here does not stay documentation - `supabase
+# start` applies it to the LOCAL GoTrue instance too, unconditionally.
+# That means local dev was actually sending every magic-link/OTP email
+# through real Resend instead of the local Mailpit catch-all, directly
+# contradicting docs/qa/FIXTURES.md's own claim that "local sign-in
+# always routes through Mailpit regardless of the email's real
+# deliverability." Confirmed via the local GoTrue container's own logs:
+# a real `gomail: could not send email... 550 "Invalid 'to' field...
+# example.com"` from Resend itself, for a plain @example.com test
+# address - proof this was hitting the real API, not a local relay.
+# Disabled here so local dev matches what FIXTURES.md documents and
+# what CLAUDE.md's own "staging must never send real messages" spirit
+# implies should also hold locally, for the same reason. The hosted
+# project's OWN SMTP is configured directly in its dashboard (see the
+# 2026-09-04 CLAUDE.md Learned Constraints entry on the production
+# cutover) - this block stays here as a record of those values, not as
+# something `supabase config push` should ever apply (that command
+# pushes this whole file, including the local `site_url`/
+# `additional_redirect_urls` above, which would clobber a hosted
+# project's own correct settings).
 [auth.email.smtp]
-enabled = true
+enabled = false
 host = "smtp.resend.com"
 port = 465
 user = "resend"
