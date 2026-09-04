@@ -11,9 +11,21 @@ import { DeclineApplicantButton } from "@/components/admin/decline-applicant-but
 import { ReopenApplicantButton } from "@/components/admin/reopen-applicant-button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { buttonClasses } from "@/components/ui/button";
+import { COPY } from "@/lib/copy";
 
 function applicantDisplayName(a: { firstName: string | null; lastName: string | null }): string {
   return [a.firstName, a.lastName].filter(Boolean).join(" ") || "Unnamed applicant";
+}
+
+// A2's own required review-queue field ("availability") had no display
+// anywhere - found during a 2026-09-04 acceptance-criteria audit. Reuses
+// the intake form's own labels (lib/copy.ts) rather than inventing new
+// admin-facing copy for the same concept.
+function formatAvailability(windows: string[]): string {
+  if (windows.length === 0) return "No availability given";
+  return windows
+    .map((w) => COPY.referral.availability_option[w as keyof typeof COPY.referral.availability_option] ?? w)
+    .join(", ");
 }
 
 function ApplicantRow({ applicant, action }: { applicant: QueuedApplicant; action: React.ReactNode }) {
@@ -25,6 +37,7 @@ function ApplicantRow({ applicant, action }: { applicant: QueuedApplicant; actio
           {applicant.relationship ?? "Relationship not given"} ·{" "}
           {applicant.careRecipientStage ?? "stage not given"} · {applicant.timeZone ?? "time zone not given"}
         </p>
+        <p className="text-meta font-ui text-ink-soft">Available: {formatAvailability(applicant.availabilityWindows)}</p>
         <p className="text-meta font-ui text-ink-soft">
           Referred via {applicant.referralSource === "partner_link" ? "partner link" : "staff form"} ·{" "}
           {applicant.daysWaiting} {applicant.daysWaiting === 1 ? "day" : "days"} waiting
