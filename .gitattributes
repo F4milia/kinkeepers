@@ -1,0 +1,28 @@
+# CLAUDE.md's "Learned constraints" section is explicitly append-only -
+# both Stream A and Stream B add a new line there on effectively every
+# session, almost always near the very end of the list. When both
+# streams' PRs are in flight around the same time (routine, given how
+# often this file gets touched - 45+ commits as of 2026-09-05), git's
+# default line-based merge sees two different, fully-compatible
+# insertions at the same location and reports a conflict, even though
+# there is nothing to actually resolve - the append-only Learned
+# Constraints format is a Git "union" merge by design (see also
+# supabase/migrations/, an append-only directory that only sequential,
+# non-conflicting NEW filenames ever touch and so has never needed this).
+#
+# `merge=union` tells Git to auto-resolve a conflict in this file by
+# taking BOTH sides' added lines rather than stopping for a human to
+# choose - mechanizing exactly what's already been done by hand on every
+# recent PR ("I manually resolve them by accepting both changes").
+#
+# Known tradeoff, accepted deliberately (2026-09-05, confirmed with
+# Ferenz): this applies to the WHOLE file, not just the Learned
+# Constraints section - if both streams ever genuinely REWRITE the same
+# existing line elsewhere in CLAUDE.md at the same time (e.g. both reword
+# the same Hard Invariant), a union merge would silently combine both
+# edits into a garbled result instead of surfacing a real conflict for a
+# human to catch. Every CLAUDE.md conflict on record so far has been a
+# pure append to Learned Constraints, never a simultaneous edit to
+# existing prose elsewhere - if that ever changes, revisit whether this
+# section needs to move to its own file instead.
+CLAUDE.md merge=union
