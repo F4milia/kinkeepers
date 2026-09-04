@@ -4,6 +4,7 @@ import { headers } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import { checkSignInRateLimit } from "@/lib/auth/rate-limit";
 import { logSignInEvent } from "@/lib/auth/log-sign-in-event";
+import { assertOutboundMessageAllowed } from "@/lib/messaging/staging-guard";
 
 // A fixed NEXT_PUBLIC_SITE_URL can only ever point at one deployment,
 // which breaks the magic-link redirect on every OTHER one - a preview
@@ -15,10 +16,29 @@ import { logSignInEvent } from "@/lib/auth/log-sign-in-event";
 // actual incoming request instead means the redirect always matches
 // wherever the request really came from - production, any preview, or
 // local dev - with no per-environment configuration at all.
+//
+// Protocol: prefer `x-forwarded-proto`, which Vercel's edge sets
+// correctly on every real request (production and every preview alike).
+// Falls back to a host-based guess only when that header is absent -
+// found during the 2026-09-04 acceptance-criteria audit that the
+// previous `NODE_ENV === "development"` check gets this wrong for a
+// LOCALLY RUN PRODUCTION BUILD (`next build && next start`, exactly
+// what playwright.config.ts's e2e webServer runs): NODE_ENV is
+// "production" there too, so the old check produced `https` for a
+// plain-http local server with no TLS at all, and GoTrue would redirect
+// to a URL nothing was listening on. A bare local host never has TLS
+// either way, real or not, so that's the one case worth guessing http
+// for; anything else (a real custom domain with no proxy header, for
+// instance) keeps the safer `https` default.
+function isLocalHost(host: string): boolean {
+  return host.startsWith("127.0.0.1") || host.startsWith("localhost");
+}
+
 export async function getRequestOrigin(): Promise<string> {
   const headersList = await headers();
-  const host = headersList.get("host");
-  const protocol = process.env.NODE_ENV === "development" ? "http" : "https";
+  const host = headersList.get("host") ?? "";
+  const forwardedProto = headersList.get("x-forwarded-proto");
+  const protocol = forwardedProto ?? (isLocalHost(host) ? "http" : "https");
   return `${protocol}://${host}`;
 }
 
@@ -57,6 +77,22 @@ export async function requestEmailLink(rawEmail: string): Promise<SignInRequestR
     return { success: false, reason: "rate_limited", retryReason: rateLimit.retryReason };
   }
 
+  // X1's own "staging must never send a real message" guarantee has to
+  // cover this call too - signInWithOtp() triggers a real, automatic
+  // GoTrue email send with no involvement from lib/messaging/send-email.ts
+  // at all, so that module's own staging-guard call does nothing to
+  // protect this path. Checked here, before the real Supabase call, same
+  // "fail closed" contract assertOutboundMessageAllowed already documents.
+  // Reuses the existing generic "send_failed" reason rather than a new
+  // one - a blocked-in-staging send and a real provider failure should
+  // look identical to the caller, not leak which environment this is.
+  try {
+    assertOutboundMessageAllowed(email);
+  } catch {
+    await logSignInEvent(email, "email_link", "failed");
+    return { success: false, reason: "send_failed" };
+  }
+
   const supabase = await createClient();
   const { error } = await supabase.auth.signInWithOtp({
     email,
@@ -84,6 +120,18 @@ export async function requestSmsCode(rawPhone: string): Promise<SignInRequestRes
   if (!rateLimit.allowed) {
     await logSignInEvent(phone, "sms_code", "rate_limited");
     return { success: false, reason: "rate_limited", retryReason: rateLimit.retryReason };
+  }
+
+  // Same staging-guard gap and fix as requestEmailLink above - see that
+  // function's own comment. This path is currently dead code (SMS is
+  // deferred until Twilio is configured, per lib/copy.ts's own sign_in
+  // comment), but fixed here too so it's correct the moment it's wired up
+  // rather than reintroducing the same gap later.
+  try {
+    assertOutboundMessageAllowed(phone);
+  } catch {
+    await logSignInEvent(phone, "sms_code", "failed");
+    return { success: false, reason: "send_failed" };
   }
 
   const supabase = await createClient();

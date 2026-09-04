@@ -37,6 +37,17 @@ export default defineConfig({
         "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0",
       SUPABASE_SERVICE_ROLE_KEY:
         "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImV4cCI6MTk4MzgxMjk5Nn0.EGIM96RAZx35lJzdJsyH-qQwv8Hdp7fsn3W0YpN81IU",
+      // X1's staging-guard (lib/messaging/staging-guard.ts) now covers
+      // requestEmailLink/requestSmsCode too - without this,
+      // e2e/helpers/sign-in.ts's real magic-link sign-in is blocked
+      // outright (APP_ENV isn't "production" here). Set explicitly
+      // rather than relying on e2e.yml's own env to be inherited, same
+      // reasoning as the two vars above - a local `npx playwright test`
+      // run needs this to work without CI's env vars being set.
+      // @example.com is the one domain IANA reserves for exactly this
+      // (RFC 2606), matched via the allowlist's leading-@ domain-suffix
+      // support - never a real caregiver's address.
+      STAGING_MESSAGE_ALLOWLIST: "@example.com",
     },
   },
 });

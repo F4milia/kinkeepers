@@ -97,7 +97,7 @@ page."*
 
 **Also found and fixed, surfaced by building the new e2e test:** `getRequestOrigin()` chose `http`/`https` from `NODE_ENV` alone, which is wrong for a locally-run production build (`next build && next start`, exactly what the e2e `webServer` runs) - production `NODE_ENV` there too, but no TLS. Real sign-in through that build failed with `net::ERR_SSL_PROTOCOL_ERROR`. Fixed to prefer `x-forwarded-proto`, falling back to a host-based localhost check.
 
-**Verdict: isolation and RLS were already excellent. Two real gaps closed (a genuinely untested wrong-role path, and a missing required UI statement), plus one unrelated bug found and fixed along the way. PR #134, open for review.**
+**Verdict: isolation and RLS were already excellent. Two real gaps closed (a genuinely untested wrong-role path, and a missing required UI statement), plus one unrelated bug found and fixed along the way. PR #134, merged.**
 
 ---
 
@@ -119,4 +119,4 @@ against seed data. Grep confirms no matching algorithm exists."*
 
 **Also found and fixed, from the prompt's own body text (not the literal acceptance line):** the review queue's required field list ("first name, relationship, care recipient stage, time zone, **availability**, referral source, days waiting") was missing `availability_windows` entirely - a real, correctly-stored column that was never selected or rendered anywhere, on either the queue list or the assignment/detail page. A reviewer had no way to see when an applicant said they were free while judging which cohort's meeting time would actually work for them - the exact mismatch A2's own "6:30 PM Eastern is useless to someone in Honolulu" reasoning was written to prevent, just from the other direction. Fixed by adding the field to the shared types, selecting it in all three query functions, and rendering it on both screens with the intake form's own existing copy (no new copy invented). Verified live: a real applicant with real availability values, confirmed the exact rendered text on both screens via a real signed-in admin session.
 
-**Verdict: one real gap found and fixed (a required review-queue field that was silently never wired up). Everything else - ordering, timezone display, the assignment/audit/event chain, waitlist grouping, and the no-auto-matcher boundary - was already correctly built and well-tested. PR TBD.**
+**Verdict: one real gap found and fixed (a required review-queue field that was silently never wired up). Everything else - ordering, timezone display, the assignment/audit/event chain, waitlist grouping, and the no-auto-matcher boundary - was already correctly built and well-tested. PR #135, open for review.**
