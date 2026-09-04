@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { cookies } from "next/headers";
 import { Atkinson_Hyperlegible_Next, Source_Serif_4 } from "next/font/google";
 import { THEME_COOKIE, isTheme, themeInitScript, type Theme } from "@/lib/theme";
+import { AuthHashErrorRedirect } from "@/components/auth/auth-hash-error-redirect";
 import "./globals.css";
 
 const atkinsonHyperlegibleNext = Atkinson_Hyperlegible_Next({
@@ -40,7 +41,10 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <meta name="color-scheme" content="light dark" />
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
       </head>
-      <body>{children}</body>
+      <body>
+        <AuthHashErrorRedirect />
+        {children}
+      </body>
     </html>
   );
 }
