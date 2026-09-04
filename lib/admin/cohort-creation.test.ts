@@ -266,6 +266,36 @@ describe("createCohortAction", () => {
     expect(auditRows).toHaveLength(1);
   });
 
+  // 2026-09-04 acceptance audit: resolveZoomCredentialsForPartner() used
+  // to run BEFORE the try/catch that's supposed to turn a Zoom failure
+  // into a graceful draft result - so getDefaultZoomCredentials()'s
+  // synchronous throw (real and current, since no ZOOM_ACCOUNT_ID/
+  // CLIENT_ID/CLIENT_SECRET exist anywhere in this project, per this
+  // file's own header comment) crashed the whole action uncaught,
+  // AFTER the cohort's own draft row had already committed. No
+  // zoomCredentials override and no partnerOrganizationId are passed
+  // here specifically to exercise that exact code path for real.
+  it("a missing default Zoom credential is caught, not thrown uncaught, leaving the cohort in draft", async () => {
+    const adminClient = await clientForUser(adminUser.id);
+
+    const result = await createCohortAction(
+      { ...baseInput, programId: licensedProgramId, facilitatorId: facilitatorUser.id },
+      adminClient,
+    );
+
+    if (!result.success || result.status !== "draft") throw new Error("expected a draft result");
+    expect(result.zoomError).toMatch(/Missing Zoom Server-to-Server OAuth credentials/);
+    createdCohortIds.push(result.cohortId);
+
+    const { data: cohort } = await admin
+      .from("cohorts")
+      .select("status, zoom_setup_error")
+      .eq("id", result.cohortId)
+      .single();
+    expect(cohort?.status).toBe("draft");
+    expect(cohort?.zoom_setup_error).toMatch(/Missing Zoom Server-to-Server OAuth credentials/);
+  });
+
   // P3: "a cohort with its own Zoom credentials uses them." No
   // zoomCredentials override is passed here - the real
   // resolveZoomCredentialsForPartner() DB lookup runs, same as a real

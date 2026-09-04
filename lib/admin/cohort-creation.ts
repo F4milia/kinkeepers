@@ -102,17 +102,34 @@ export async function createCohortAction(
     program.session_count,
   );
 
-  // P3: "a cohort may carry its own Zoom credentials" - resolved from
-  // the cohort's partner, not skipped when a test passes its own
-  // zoomCredentials override (that override still wins outright, same
-  // as before this change; video_provider is just labeled 'kinkeepers'
-  // for that case since no test currently asserts on it).
-  const { credentials: resolvedCredentials, provider: videoProvider } = zoomCredentials
-    ? { credentials: zoomCredentials, provider: "kinkeepers" as const }
-    : await resolveZoomCredentialsForPartner(admin, input.partnerOrganizationId);
-
   let meeting: CreatedMeeting;
+  let videoProvider: "kinkeepers" | "partner";
   try {
+    // P3: "a cohort may carry its own Zoom credentials" - resolved from
+    // the cohort's partner, not skipped when a test passes its own
+    // zoomCredentials override (that override still wins outright, same
+    // as before this change; video_provider is just labeled 'kinkeepers'
+    // for that case since no test currently asserts on it).
+    //
+    // Deliberately INSIDE this try - found during a 2026-09-04
+    // acceptance-criteria audit that it used to run before the try
+    // block started. getDefaultZoomCredentials() (called here whenever
+    // there's no partner override and no partner-specific row) throws
+    // synchronously when ZOOM_ACCOUNT_ID/CLIENT_ID/CLIENT_SECRET aren't
+    // set - a real, current state, not hypothetical (the same error
+    // text appears in real audit_log rows). With resolution outside the
+    // try, that throw was completely uncaught: the whole Server Action
+    // crashed with a generic 500, even though the cohort's own `draft`
+    // row above had already committed - directly contradicting this
+    // session's own acceptance line ("the cohort is created in draft
+    // and surfaces the error. Do not create a cohort with silently
+    // missing join links") and leaving an admin looking at a crash page
+    // with no way to tell the cohort already exists.
+    const resolved = zoomCredentials
+      ? { credentials: zoomCredentials, provider: "kinkeepers" as const }
+      : await resolveZoomCredentialsForPartner(admin, input.partnerOrganizationId);
+    videoProvider = resolved.provider;
+
     meeting = await createRecurringMeeting(
       {
         topic: input.name,
@@ -122,7 +139,7 @@ export async function createCohortAction(
         sessionCount: program.session_count,
         repeatIntervalWeeks: input.cadence === "biweekly" ? 2 : 1,
       },
-      resolvedCredentials,
+      resolved.credentials,
       zoomFetchImpl ?? fetch,
     );
   } catch (error) {
