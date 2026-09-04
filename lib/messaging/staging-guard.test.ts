@@ -43,4 +43,20 @@ describe("assertOutboundMessageAllowed", () => {
     process.env.STAGING_MESSAGE_ALLOWLIST = "";
     expect(() => assertOutboundMessageAllowed("team@example.com")).toThrow();
   });
+
+  it("allows any recipient at a domain given as a leading-@ allowlist entry", () => {
+    process.env.STAGING_MESSAGE_ALLOWLIST = "@example.com";
+    expect(() => assertOutboundMessageAllowed("e2e-admin-1234-abcd@example.com")).not.toThrow();
+    expect(() => assertOutboundMessageAllowed("anyone-else@example.com")).not.toThrow();
+  });
+
+  it("a domain allowlist entry does not match a different domain", () => {
+    process.env.STAGING_MESSAGE_ALLOWLIST = "@example.com";
+    expect(() => assertOutboundMessageAllowed("caregiver@gmail.com")).toThrow(/Blocked outbound message/);
+  });
+
+  it("a domain allowlist entry does not match a lookalike domain sharing only a suffix", () => {
+    process.env.STAGING_MESSAGE_ALLOWLIST = "@example.com";
+    expect(() => assertOutboundMessageAllowed("caregiver@notexample.com")).toThrow(/Blocked outbound message/);
+  });
 });
