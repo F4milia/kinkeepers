@@ -30,13 +30,13 @@ works."*
 | # | Criterion | Status | Evidence |
 |---|---|---|---|
 | 1 | Staging deploys independently | ✅ PASS | Production (`vnadfnnckmkswfrzfjkj`) and staging (`lupiicjafzrbihaosezv`) are genuinely separate Supabase projects, confirmed via `vercel env pull` for both environments. |
-| 2 | Seed produces a browsable multi-cohort program | ⏳ PARTIAL, not yet manually confirmed | `supabase/seed.sql` seeds 4 real cohorts (browsable), but every one has `program_id = null` — no seeded program is `licensed` (X2's own rule). "Multi-cohort" real; "program" attached to those cohorts isn't. **Ferenz to check:** open `/admin/cohorts` on staging, confirm cohorts show with no program named. |
+| 2 | Seed produces a browsable multi-cohort program | ✅ PASS, confirmed live | Ferenz confirmed on staging: cohorts are real and browsable, none has a program attached - matching `supabase/seed.sql`'s deliberate design (zero seeded programs are `licensed`). He also tried creating a new cohort and confirmed it's blocked, since no program is licensed - this is X2's own core enforcement working correctly on real staging, not just in a test. Counted as a live confirmation of X2's "only licensed programs are selectable... enforce it" criterion too. |
 | 3 | Reminder job sends nothing outbound, verified via provider logs | 🔧 FIXED (real gap found and closed) | Ferenz exported staging's real Resend send history (63 rows). Every recipient checked out as a legitimate team address, but tracing why "Your sign-in link"/"Confirm your email address" succeeded found a real gap: `requestEmailLink()`/`requestSmsCode()` call `signInWithOtp()` directly, triggering a real GoTrue-side email/SMS send with zero involvement from `lib/messaging/send-email.ts` - so `assertOutboundMessageAllowed()` never protected this path at all. Staging was only safe because every tester happened to use a real, team-controlled inbox. Fixed in PR #133 - the guard is now called before `signInWithOtp()` in both functions, with tests proving the real Supabase call is never reached for a blocked recipient. Also separately verified `assertOutboundMessageAllowed()` itself against staging's real, live-pulled `APP_ENV`/`STAGING_MESSAGE_ALLOWLIST` values before writing the fix - confirmed it blocks a non-team address and allows the real team address through, using actual deployed config. |
 | 4 | Reset works | ✅ PASS, confirmed for real | Ferenz ran `npm run db:reset:staging` himself, then confirmed in Supabase Studio (`lupiicjafzrbihaosezv` → `cohorts` table) that all 4 expected seed fixtures reappeared fresh - not just that the command exited without error. |
 | 5 | (fuller prompt, not literal acceptance line) Separate Zoom app credentials | 🚩 FLAGGED — confirmed FALSE | Confirmed via direct Vercel API query: staging and production share the exact same `ZOOM_ACCOUNT_ID`/`ZOOM_CLIENT_ID`/`ZOOM_CLIENT_SECRET`. Needs a second real Zoom Server-to-Server OAuth app from Ivan — not fixable in code. |
 | 6 | `README.md` documents staging-vs-production differences | 🔧 FIXED | PR #130 — rewrote the Environments section to reflect the real post-cutover state, and corrected `lib/zoom/client.ts`'s comment, which had cited the README for a claim it never made. |
 
-**Still open on X1:** #2 needs Ferenz to browse `/admin/cohorts` on staging and confirm cohorts show with no program named (expected, not a bug - X2 deliberately seeds zero licensed programs); #5 (shared Zoom credentials) needs Ivan to provision a second real Zoom app - not resolvable in code. Everything else on X1 is now settled.
+**X1 is fully settled** except #5 (shared Zoom credentials, confirmed real, needs Ivan to provision a second real Zoom app - not resolvable in code). Also found and fixed along the way, unrelated to any single numbered item: staging's real admin account was wiped by the reset (`db reset --linked` recreates the whole `auth` schema, and neither `seed.sql` nor any migration ever grants `role = 'admin'` to anyone - same gap Stream A already found and hand-fixed for the production cutover). Ferenz re-elevated it manually via Supabase Studio's SQL editor, same one-off method as production. Worth a real fixture eventually (a seeded, sign-in-able staging admin, the same pattern already used for Renata Solis/Jamie Ellis), but out of scope for this audit pass.
 
 ---
 
@@ -58,6 +58,26 @@ flow. Health check correctly reports a degraded dependency."*
 
 ---
 
+## P3: Zoom for Healthcare integration — reviewed with Ferenz 2026-09-04
+
+Acceptance (verbatim): *"cohort creation produces a recurring meeting with
+all five enforced settings verified via the Zoom API. Join URL and dial-in
+stored per session. Participant report pulls and pre-fills. Attendance
+cannot be committed without a facilitator action. A cohort with its own
+Zoom credentials uses them."*
+
+| # | Criterion | Status | Evidence |
+|---|---|---|---|
+| 1 | All five enforced settings via the Zoom API | 🚩 FLAGGED — 4 of 5 | `lib/zoom/meeting.ts` sends `auto_recording: "none"`, `waiting_room: true`, `join_before_host: false`, and a required password. Screen-share host-only is NOT sent - researched, not guessed: Zoom's meeting-creation API has no documented per-meeting field for it at all, every source treats it as account/user-level only. Not fixable in code - needs Ivan to confirm it's already an account-level default on the real Zoom Healthcare account, or set it there if not (Account Settings → In Meeting (Basic) → Screen Sharing). |
+| 2 | Join URL and dial-in stored per session | ✅ PASS | `finalize_cohort_sessions()` writes them per session row; real DB-backed test confirms 3 real rows each carry a distinct value. |
+| 3 | Participant report pulls and pre-fills | ✅ PASS | Real Zoom participant-report pull, matched to applicants by email then phone, never auto-commits. |
+| 4 | Attendance cannot be committed without a facilitator action | ✅ PASS | `submit_session_log` is `service_role`-only; exactly one application code path calls it, gated by role + ownership check. |
+| 5 | A cohort with its own Zoom credentials uses them | ✅ PASS | Real test proves the actual OAuth header sent to Zoom was built from the partner's own credentials, not just that a DB row exists. |
+
+**Closed for now.** Item 1 is the only open item, and it's genuinely Ivan's call, not code - see the question drafted above for how to ask him. Everything else on P3 is a clean pass.
+
+---
+
 ## Remaining sessions — automated first-pass findings, not yet walked through together
 
 The rest of this file is what five parallel research passes plus direct
@@ -65,13 +85,6 @@ Vercel/GitHub checks found on 2026-09-04, before Ferenz asked to slow down
 and go session-by-session together instead. Kept here as the starting point
 for each session's own walkthrough — nothing below has been jointly
 confirmed yet, so treat every line as "to verify," not "done."
-
-### P3: Zoom for Healthcare integration
-- 4 of 5 enforced Zoom settings sent via API (auto_recording, waiting_room, join_before_host, password); **screen-share host-only is NOT sent** — Zoom's meeting-creation API has no documented per-meeting field for it (researched, not guessed). Needs Ivan to confirm it's an account-level default, or a live API check.
-- Join URL/dial-in stored per session — PASS, real DB-backed test.
-- Participant report pulls and pre-fills, never auto-commits — PASS.
-- Attendance requires facilitator action — PASS, single real call path confirmed.
-- Partner Zoom credentials actually used when present — PASS, real test proves the mocked fetch's own auth header came from the partner's credentials, not just that a DB row exists.
 
 ### L1: Sign-in
 - SMS deferral to email-only is real (Ferenz's own prior instruction) but only documented in a `lib/copy.ts` comment — never added to CLAUDE.md's Learned Constraints despite amending Hard Invariant #1.
