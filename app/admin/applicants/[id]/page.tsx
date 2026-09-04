@@ -5,9 +5,19 @@ import { listOpenCohortsForApplicant } from "@/lib/admin/assignment";
 import { AssignApplicantButton } from "@/components/admin/assign-applicant-button";
 import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
+import { COPY } from "@/lib/copy";
 
 function applicantDisplayName(a: { firstName: string | null; lastName: string | null }): string {
   return [a.firstName, a.lastName].filter(Boolean).join(" ") || "Unnamed applicant";
+}
+
+// Same gap, same fix, as app/admin/applicants/page.tsx - see that
+// file's comment.
+function formatAvailability(windows: string[]): string {
+  if (windows.length === 0) return "No availability given";
+  return windows
+    .map((w) => COPY.referral.availability_option[w as keyof typeof COPY.referral.availability_option] ?? w)
+    .join(", ");
 }
 
 function formatComposition(composition: { relationship: string | null; careRecipientStage: string | null; count: number }[]): string {
@@ -37,6 +47,9 @@ export default async function ApplicantAssignmentPage({ params }: { params: Prom
         {applicant.relationship ?? "Relationship not given"} · {applicant.careRecipientStage ?? "stage not given"} ·{" "}
         {applicant.timeZone ?? "time zone not given"} · {applicant.daysWaiting}{" "}
         {applicant.daysWaiting === 1 ? "day" : "days"} waiting
+      </p>
+      <p className="mt-1 text-body font-ui text-ink-soft">
+        Available: {formatAvailability(applicant.availabilityWindows)}
       </p>
 
       <h2 className="mt-8 text-h3 font-heading text-ink">Open cohorts</h2>

@@ -74,4 +74,49 @@ role."*
 | 9 | Waitlist groups by relationship and stage | ✅ PASS | Same pgTAP file, `applicant_waitlist_summary` view, correct grouped count, and confirmed to respect the caller's own RLS via `security_invoker` (not a service-role bypass). |
 | 10 | RLS prevents cross-partner visibility, real JWTs not service role | ✅ PASS | Same pgTAP file - real authenticated JWTs throughout, plus an actual documented negative-test drill (policy dropped, 3 of 10 assertions correctly failed, policy restored, all 10 passed again) matching CLAUDE.md's own testing-rules requirement exactly. |
 
-**Verdict: one real, significant gap found and fixed (a required UI screen that never got built) - PR TBD. Everything else was already correctly built and well-tested.**
+**Verdict: one real, significant gap found and fixed (a required UI screen that never got built) - PR #132, merged. Everything else was already correctly built and well-tested.**
+
+---
+
+## A1: Admin shell, roles, and partner organizations — audited 2026-09-04
+
+Acceptance (verbatim): *"three test users, one per persona, each seeing
+only their permitted nav and data. Partner A blocked from partner B's data
+at the policy level, verified by a test that fails if RLS is removed.
+Direct URL access to an unpermitted route returns a refusal, not a blank
+page."*
+
+| # | Criterion | Status | Evidence |
+|---|---|---|---|
+| 1 | Three personas, each seeing only their permitted nav | ✅ PASS | `lib/admin/nav.test.ts` (unit) plus new live e2e coverage (`e2e/admin-role-access.spec.ts`) - real signed-in facilitator/partner_staff/admin sessions, each showing exactly the right nav items in the real rendered app. |
+| 2 | Each seeing only their permitted data | ✅ PASS | `partner_cohort_scoping.sql` and `session_attendance.sql` pgTAP suites, both with real authenticated JWTs and a documented negative-test drill (policy dropped, assertions correctly fail, policy restored, all pass again). |
+| 3 | Partner A blocked from partner B's data at the policy level, test fails if RLS removed | ✅ PASS | Same two pgTAP files - cohorts, sessions, and attendance all covered, each with its own drop-policy/reset/confirm cycle documented in the file. |
+| 4 | Direct URL access to an unpermitted route returns a refusal, not a blank page | 🔧 FIXED (real e2e gap closed) | Unauthenticated case was already covered (`e2e/admin-access.spec.ts`). The **signed-in wrong-role** case had zero browser-driven coverage - that file's own comment named it as out of scope pending real-sign-in Playwright infrastructure, which this session's P1/P2 audit work had since built. Added `e2e/helpers/sign-in.ts` (reusable real magic-link sign-in via Mailpit) and `e2e/admin-role-access.spec.ts`, proving live that a facilitator/partner_staff/member hitting an unpermitted route gets the real refusal screen. |
+
+**Also found and fixed, from the prompt's own body text (not the literal acceptance line):** "Partner staff never see discussion content... say it out loud in the UI" - grepped every admin screen, found this stated nowhere. Added to `AdminShell` (conditional on `partner_staff`), verified live via e2e that it shows for partner_staff and not for admin.
+
+**Also found and fixed, surfaced by building the new e2e test:** `getRequestOrigin()` chose `http`/`https` from `NODE_ENV` alone, which is wrong for a locally-run production build (`next build && next start`, exactly what the e2e `webServer` runs) - production `NODE_ENV` there too, but no TLS. Real sign-in through that build failed with `net::ERR_SSL_PROTOCOL_ERROR`. Fixed to prefer `x-forwarded-proto`, falling back to a host-based localhost check.
+
+**Verdict: isolation and RLS were already excellent. Two real gaps closed (a genuinely untested wrong-role path, and a missing required UI statement), plus one unrelated bug found and fixed along the way. PR #134, merged.**
+
+---
+
+## A2: Intake review and cohort assignment — audited 2026-09-04
+
+Acceptance (verbatim): *"queue ordered oldest first. Cohort meeting times
+display in the applicant's zone. Assignment moves status, writes an event,
+writes an audit row, and removes the applicant from the queue. Waitlist
+groups correctly and the 'ready to open' view returns accurate counts
+against seed data. Grep confirms no matching algorithm exists."*
+
+| # | Criterion | Status | Evidence |
+|---|---|---|---|
+| 1 | Queue ordered oldest first | ✅ PASS | `lib/admin/applicants.test.ts` - real DB rows, older applicant's index confirmed before newer's. |
+| 2 | Cohort meeting times display in the applicant's zone | ✅ PASS | `lib/admin/assignment.ts`'s `listOpenCohortsForApplicant`, via `describeCohortMeetingForApplicant`, rendered on the assignment page. |
+| 3 | Assignment moves status, writes an event, writes an audit row, removes from queue | ✅ PASS | `applicant_assignment.sql` pgTAP (23 assertions, baseline-delta audit_log pattern) proves status→`enrolled` and the audit row directly; the status-change→event trigger is the same universal mechanism already proven in P2's own audit; removal from the queue follows directly since the queue query filters on `status = 'pending_review'`. |
+| 4 | Waitlist groups correctly, "ready to open" view returns accurate counts | ✅ PASS | `lib/admin/waitlist.test.ts` plus P2's own pgTAP coverage of `applicant_waitlist_summary`. The view deliberately shows only a plain count + oldest-wait per group, no invented "ready" threshold - correct per CLAUDE.md invariant #5, not a shortfall (a threshold would itself be the auto-matcher judgment the invariant forbids). |
+| 5 | Grep confirms no matching algorithm exists | ✅ PASS | Grepped for match/score/algorithm/recommend/auto-match across `app/`, `lib/`, `components/` - the only hits are comments explicitly rejecting the idea. |
+
+**Also found and fixed, from the prompt's own body text (not the literal acceptance line):** the review queue's required field list ("first name, relationship, care recipient stage, time zone, **availability**, referral source, days waiting") was missing `availability_windows` entirely - a real, correctly-stored column that was never selected or rendered anywhere, on either the queue list or the assignment/detail page. A reviewer had no way to see when an applicant said they were free while judging which cohort's meeting time would actually work for them - the exact mismatch A2's own "6:30 PM Eastern is useless to someone in Honolulu" reasoning was written to prevent, just from the other direction. Fixed by adding the field to the shared types, selecting it in all three query functions, and rendering it on both screens with the intake form's own existing copy (no new copy invented). Verified live: a real applicant with real availability values, confirmed the exact rendered text on both screens via a real signed-in admin session.
+
+**Verdict: one real gap found and fixed (a required review-queue field that was silently never wired up). Everything else - ordering, timezone display, the assignment/audit/event chain, waitlist grouping, and the no-auto-matcher boundary - was already correctly built and well-tested. PR #135, open for review.**
