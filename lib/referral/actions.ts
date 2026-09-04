@@ -3,6 +3,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireRole } from "@/lib/auth/roles";
+import { getRequestOrigin } from "@/lib/auth/actions";
 import { sendResumeEmail } from "@/lib/referral/send-resume-email";
 import { notifyApplicationReceived } from "@/lib/messaging/applicant-notifications";
 import { notifyBestEffort } from "@/lib/messaging/notify-best-effort";
@@ -105,6 +106,48 @@ export async function createStaffReferral(
   }
 
   return { success: true, applicantId: data.id, resumeToken: data.resume_token };
+}
+
+export interface StaffReferralFormState {
+  status: "idle" | "error" | "success";
+  fieldErrors: Partial<Record<"partnerReferenceId", string>>;
+  formError?: string;
+  resumeUrl?: string;
+}
+
+// Form-state adapter around createStaffReferral() for the partner_staff
+// "Refer someone" screen (app/admin/refer) - the acceptance-criteria
+// audit that found this screen missing entirely also found the
+// underlying action already built and tested; this is only the missing
+// UI wiring. Builds the same shareable link shape sendResumeEmail mails
+// (`/intake/resume?token=...`) using the real request's own origin
+// (getRequestOrigin(), available here since a form submission always has
+// a request context, unlike the async email send).
+export async function createStaffReferralAction(
+  _prevState: StaffReferralFormState,
+  formData: FormData,
+  callerClient?: SupabaseClient,
+): Promise<StaffReferralFormState> {
+  const partnerReferenceId = String(formData.get("partnerReferenceId") ?? "").trim() || undefined;
+
+  const result = await createStaffReferral(partnerReferenceId, callerClient);
+
+  if (!result.success) {
+    if (result.reason === "invalid_partner_reference_id") {
+      return {
+        status: "error",
+        fieldErrors: { partnerReferenceId: "That's too long - 64 characters or fewer." },
+      };
+    }
+    return { status: "error", fieldErrors: {}, formError: "Something went wrong. Try again." };
+  }
+
+  const origin = await getRequestOrigin();
+  return {
+    status: "success",
+    fieldErrors: {},
+    resumeUrl: `${origin}/intake/resume?token=${result.resumeToken}`,
+  };
 }
 
 // Ten fields max per the P2 spec (9 intake fields here; referral_source
