@@ -5,15 +5,23 @@ import { logError } from "@/lib/log";
  * Zoom Server-to-Server OAuth client. Holds account-wide meeting-management
  * credentials - never reachable from client code, never logged.
  *
- * Environment separation (staging vs. production) happens at the
- * credential level, not at runtime: a staging deployment is configured
- * with a separate Zoom app's credentials (recording disabled at the
- * account level, per X1's README), so this module doesn't need its own
- * APP_ENV branch the way lib/messaging/staging-guard.ts does for
- * Twilio/Resend - there's no "recipient" here to allowlist. What must
- * hold in every environment equally is that the five enforced settings
- * (see meeting.ts) are always applied; that's not environment-gated
- * either.
+ * This module has no APP_ENV branch the way lib/messaging/staging-guard.ts
+ * does for Twilio/Resend, because there's no "recipient" here to allowlist -
+ * a Zoom meeting isn't sent to a person, it's created on an account. That
+ * part is still true. What's NOT true, corrected 2026-09-04 after this
+ * comment was found to cite a claim the README never actually made: there
+ * is currently NO environment separation at the Zoom-credential level.
+ * Confirmed directly against Vercel: ZOOM_ACCOUNT_ID/ZOOM_CLIENT_ID/
+ * ZOOM_CLIENT_SECRET are the exact same values on both the Preview and
+ * Production environments, so a staging cohort's meeting is created on the
+ * SAME real Zoom account production uses - not a separate app with
+ * recording disabled at the account level, which is what X1's own prompt
+ * actually required. See README.md's "Environments" section for the
+ * current, honest state of this gap - it needs a second real Zoom app from
+ * Ivan, not a code change. What DOES hold in every environment equally,
+ * independent of which account is configured: the five enforced settings
+ * (see meeting.ts) are applied at the application level on every meeting
+ * this code creates, so recording stays blocked regardless of this gap.
  */
 
 export interface ZoomCredentials {
