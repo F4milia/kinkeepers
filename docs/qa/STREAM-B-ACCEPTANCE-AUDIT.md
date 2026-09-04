@@ -34,9 +34,9 @@ works."*
 | 3 | Reminder job sends nothing outbound, verified via provider logs | ⏳ mechanism confirmed armed, verification not yet done | `APP_ENV`/`STAGING_MESSAGE_ALLOWLIST` confirmed genuinely set on Vercel Preview (checked directly). Nobody has pulled real Twilio/Resend dashboard logs to confirm zero real sends. **Ferenz to check.** |
 | 4 | Reset works | ⏳ wiring confirmed, not run | `npm run db:reset:staging` → `supabase db reset --linked`, correctly targets staging. Not run against the live project this pass — a real destructive-adjacent action, held pending explicit go-ahead. |
 | 5 | (fuller prompt, not literal acceptance line) Separate Zoom app credentials | 🚩 FLAGGED — confirmed FALSE | Confirmed via direct Vercel API query: staging and production share the exact same `ZOOM_ACCOUNT_ID`/`ZOOM_CLIENT_ID`/`ZOOM_CLIENT_SECRET`. Needs a second real Zoom Server-to-Server OAuth app from Ivan — not fixable in code. |
-| 6 | `README.md` documents staging-vs-production differences | ⏳ confirmed stale, fix offered not yet actioned | Still says "there is no separate production project yet" — false post-cutover. |
+| 6 | `README.md` documents staging-vs-production differences | 🔧 FIXED | PR #130 — rewrote the Environments section to reflect the real post-cutover state, and corrected `lib/zoom/client.ts`'s comment, which had cited the README for a claim it never made. |
 
-**Next:** resolve #2–#4 and #6 together below.
+**Still open on X1:** #2 and #3 need Ferenz to check staging directly (browse `/admin/cohorts`, pull real Twilio/Resend provider logs); #4 (running a real reset against staging) is being held pending an explicit go-ahead since it's a live, disruptive action; #5 (shared Zoom credentials) needs Ivan to provision a second real Zoom app - not resolvable in code.
 
 ---
 
