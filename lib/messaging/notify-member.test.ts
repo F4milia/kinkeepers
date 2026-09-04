@@ -58,7 +58,16 @@ describe("notifyMember", () => {
     return data.id;
   }
 
-  it("defaults to email only when no preference was ever recorded", async () => {
+  // 2026-09-05 P4-pre acceptance audit: this used to assert "email only"
+  // for a null preference, matching notifyMember's own then-comment - but
+  // that directly contradicted P4-pre's own spec ("Channel: email, SMS,
+  // or both. Default both.") and P4's own body text ("Default to both
+  // for the first cohort"). The DB column is now `not null default
+  // 'both'` (20260905140000_default_contact_channel_both.sql), so null
+  // shouldn't occur in practice - this test exercises the defensive
+  // fallback directly and confirms it now matches the documented default
+  // instead of silently diverging from it.
+  it("defaults to both channels when no preference was ever recorded", async () => {
     const applicantId = await insertApplicant();
     await notifyMember({
       ...baseParams,
@@ -67,7 +76,7 @@ describe("notifyMember", () => {
       contact: contact({ preferredContactChannel: null }),
     });
     expect(sendEmail).toHaveBeenCalledTimes(1);
-    expect(sendSms).not.toHaveBeenCalled();
+    expect(sendSms).toHaveBeenCalledTimes(1);
   });
 
   it("sends both when the preference is 'both', recording one notification_log row per channel", async () => {

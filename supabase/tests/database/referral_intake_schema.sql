@@ -4,7 +4,7 @@
 -- real authenticated role, never assumed.
 
 begin;
-select plan(10);
+select plan(11);
 
 -- Two partner orgs and two partner-staff users, one per org, plus an
 -- admin - enough to prove cross-org isolation, not just same-org access.
@@ -50,6 +50,17 @@ select is(
      where applicant_id = '33333333-0000-0000-0000-000000000001'),
   null,
   'the initial status event has a null from_status'
+);
+
+-- P4-pre's own spec: "Channel: email, SMS, or both. Default both." -
+-- neither applicant insert above sets preferred_contact_channel, so this
+-- proves the column's own default actually applies (20260905140000),
+-- not just that some caller happens to pass 'both' explicitly.
+select is(
+  (select preferred_contact_channel::text from applicants
+     where id = '33333333-0000-0000-0000-000000000001'),
+  'both',
+  'an applicant row with no explicit preference defaults to both channels'
 );
 
 -- Trigger: an UPDATE that changes status logs a second event.

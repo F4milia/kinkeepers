@@ -7,7 +7,11 @@ import { sendSms } from "@/lib/messaging/send-sms";
 export interface MemberContact {
   email: string | null;
   phone: string | null;
-  /** Null means intake never captured a preference - see the default below. */
+  /**
+   * Shouldn't be null in practice (the DB column is `not null default
+   * 'both'`) - kept nullable here as a defensive type only, handled the
+   * same as "both" below, never "email only." See the default below.
+   */
   preferredContactChannel: "email" | "sms" | "both" | null;
 }
 
@@ -97,11 +101,14 @@ async function sendOneChannel(params: {
  * recording the outcome in notification_log (A5's failed-notifications
  * queue reads that table directly).
  *
- * A null preference (intake never asked, or the caregiver skipped it)
- * defaults to email only, not sms - this project's own established
- * default reach channel elsewhere (magic-link auth, the intake-resume
- * link) is always email, never sms, so this stays consistent rather
- * than inventing a new default here.
+ * A null preference should no longer occur - the applicants.
+ * preferred_contact_channel column is `not null default 'both'` as of
+ * 20260905140000_default_contact_channel_both.sql, matching P4-pre's own
+ * spec ("Channel: email, SMS, or both. Default both.") and P4's own
+ * body text ("Default to both for the first cohort"). This function
+ * still treats null defensively the same way - as both channels, not
+ * email-only - in case a caller ever passes one anyway, so a defensive
+ * fallback can't silently violate the documented default.
  */
 export async function notifyMember({
   admin,
@@ -115,7 +122,10 @@ export async function notifyMember({
   logContext,
 }: NotifyMemberParams): Promise<void> {
   const wantsEmail = contact.preferredContactChannel !== "sms";
-  const wantsSms = contact.preferredContactChannel === "sms" || contact.preferredContactChannel === "both";
+  const wantsSms =
+    contact.preferredContactChannel === "sms" ||
+    contact.preferredContactChannel === "both" ||
+    contact.preferredContactChannel === null;
 
   const sends: Promise<void>[] = [];
   if (wantsEmail && contact.email) {
