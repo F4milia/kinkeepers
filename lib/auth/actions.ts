@@ -16,10 +16,29 @@ import { assertOutboundMessageAllowed } from "@/lib/messaging/staging-guard";
 // actual incoming request instead means the redirect always matches
 // wherever the request really came from - production, any preview, or
 // local dev - with no per-environment configuration at all.
+//
+// Protocol: prefer `x-forwarded-proto`, which Vercel's edge sets
+// correctly on every real request (production and every preview alike).
+// Falls back to a host-based guess only when that header is absent -
+// found during the 2026-09-04 acceptance-criteria audit that the
+// previous `NODE_ENV === "development"` check gets this wrong for a
+// LOCALLY RUN PRODUCTION BUILD (`next build && next start`, exactly
+// what playwright.config.ts's e2e webServer runs): NODE_ENV is
+// "production" there too, so the old check produced `https` for a
+// plain-http local server with no TLS at all, and GoTrue would redirect
+// to a URL nothing was listening on. A bare local host never has TLS
+// either way, real or not, so that's the one case worth guessing http
+// for; anything else (a real custom domain with no proxy header, for
+// instance) keeps the safer `https` default.
+function isLocalHost(host: string): boolean {
+  return host.startsWith("127.0.0.1") || host.startsWith("localhost");
+}
+
 export async function getRequestOrigin(): Promise<string> {
   const headersList = await headers();
-  const host = headersList.get("host");
-  const protocol = process.env.NODE_ENV === "development" ? "http" : "https";
+  const host = headersList.get("host") ?? "";
+  const forwardedProto = headersList.get("x-forwarded-proto");
+  const protocol = forwardedProto ?? (isLocalHost(host) ? "http" : "https");
   return `${protocol}://${host}`;
 }
 

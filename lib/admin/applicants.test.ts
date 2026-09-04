@@ -86,6 +86,7 @@ describe("applicant review queue", () => {
         first_name: "Newer",
         last_name: "Applicant",
         status: "pending_review",
+        availability_windows: ["weekday_mornings", "weekends"],
       })
       .select("id")
       .single();
@@ -117,9 +118,11 @@ describe("applicant review queue", () => {
 
     const older = queue.find((a) => a.id === olderPendingId)!;
     expect(older.daysWaiting).toBeGreaterThanOrEqual(5);
+    expect(older.availabilityWindows).toEqual([]);
 
     const newer = queue.find((a) => a.id === pendingId)!;
     expect(newer.daysWaiting).toBe(0);
+    expect(newer.availabilityWindows).toEqual(["weekday_mornings", "weekends"]);
   });
 
   it("declining moves an applicant out of the pending queue and into declined", async () => {

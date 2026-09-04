@@ -21,6 +21,22 @@ function getAllowlist(): string[] {
     .filter(Boolean);
 }
 
+// An allowlist entry starting with "@" matches any recipient at that
+// domain, not just an exact address - added so e2e's own real-sign-in
+// tests (which generate a fresh, random @example.com address per run,
+// never a fixed one an exact-match entry could name) can allowlist the
+// one domain IANA reserves for exactly this purpose (RFC 2606) without
+// widening what a real caregiver's address could ever match. A plain
+// entry with no leading "@" still requires an exact match, unchanged -
+// this doesn't relax anything for an existing allowlist that never uses
+// the new syntax.
+function matchesAllowlistEntry(recipient: string, entry: string): boolean {
+  if (entry.startsWith("@")) {
+    return recipient.endsWith(entry);
+  }
+  return recipient === entry;
+}
+
 /**
  * Call this immediately before any Twilio/Resend send. Throws if the
  * environment is non-production and the recipient isn't on the staging
@@ -32,7 +48,7 @@ export function assertOutboundMessageAllowed(recipient: string): void {
   }
 
   const normalized = recipient.trim().toLowerCase();
-  if (getAllowlist().includes(normalized)) {
+  if (getAllowlist().some((entry) => matchesAllowlistEntry(normalized, entry))) {
     return;
   }
 

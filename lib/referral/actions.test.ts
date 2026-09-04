@@ -212,7 +212,7 @@ describe("referral capture", () => {
       );
       expect(result.status).toBe("success");
       if (result.status !== "success") throw new Error("expected success");
-      expect(result.resumeUrl).toMatch(/^https:\/\/localhost:3000\/intake\/resume\?token=/);
+      expect(result.resumeUrl).toMatch(/^http:\/\/localhost:3000\/intake\/resume\?token=/);
 
       const token = new URL(result.resumeUrl!).searchParams.get("token");
       const { data } = await admin
