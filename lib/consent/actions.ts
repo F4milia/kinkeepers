@@ -3,6 +3,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { hashRequestIp } from "@/lib/auth/ip-hash";
 import type { ConsentDocumentType } from "@/lib/consent/data";
 
 export type RecordConsentResult = { success: true } | { success: false; reason: "unauthenticated" };
@@ -28,10 +29,20 @@ export async function recordConsent(
   } = await supabase.auth.getUser();
   if (!user) return { success: false, reason: "unauthenticated" };
 
+  // P6 audit finding (2026-09-05): member_consents.ip_hash is a real
+  // column the run doc's own prompt explicitly requires ("agreed_at, and
+  // from what IP hash"), but this insert never populated it - always
+  // NULL on every real consent row. Reuses the same hashRequestIp()
+  // helper lib/auth/log-sign-in-event.ts already uses for the identical
+  // purpose (an HMAC'd, non-reversible IP, never the raw address), rather
+  // than duplicating that logic here.
+  const ipHash = await hashRequestIp();
+
   const { error } = await supabase.from("member_consents").insert({
     member_id: user.id,
     document_type: documentType,
     document_version: version,
+    ip_hash: ipHash,
   });
   if (error) throw error;
 
