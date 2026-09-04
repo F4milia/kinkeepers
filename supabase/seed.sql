@@ -325,3 +325,43 @@ insert into auth.identities (id, user_id, provider_id, identity_data, provider, 
   '{"sub":"66666666-0000-0000-0000-0000000f3601","email":"ferenz+kinkeepers-member@brandlamb.com","email_verified":true,"phone_verified":false}',
   'email', now(), now(), now()
 );
+
+-- P6 QA fixture: a real, sign-in-able applicant in a PRE-ASSIGNMENT state
+-- (status pending_review, cohort_id left null by omission) - needed to
+-- observe live what happens at the actual moment of cohort assignment
+-- (does signing in right after an admin assigns this person to a cohort
+-- route to /consent, or not), which the L3 fixture above can't exercise
+-- since Jamie Ellis is already enrolled/assigned. Same auth.users/
+-- auth.identities pattern as Renata Solis and Jamie Ellis (seed.sql has
+-- no Admin API access to create a real account any other way).
+-- Deliberately left unclaimed (applicants.profile_id stays null) for the
+-- same reason as Jamie Ellis's fixture - first sign-in should exercise
+-- the real claim_applicant_for_current_user() match-by-email flow, not
+-- skip it. Assigning this applicant to a cohort is meant to be done live,
+-- by hand, in /admin/applicants during the actual test - not seeded here.
+insert into applicants (
+  id, partner_organization_id, referral_source, first_name, last_name, email, phone,
+  time_zone, relationship, care_recipient_stage, preferred_contact_channel, status
+) values (
+  '88888888-0000-0000-0000-00000000c601',
+  (select id from partner_organizations where name = 'Riverside Health Network'),
+  'partner_link', 'Dana', 'Whitfield', 'ferenz+kinkeepers-p6@brandlamb.com', '+15125550199',
+  'America/Chicago', 'Spouse', 'early', 'email', 'pending_review'
+);
+
+insert into auth.users (
+  instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
+  raw_app_meta_data, raw_user_meta_data, created_at, updated_at, confirmation_token,
+  recovery_token, email_change_token_new, email_change
+) values (
+  '00000000-0000-0000-0000-000000000000',
+  '66666666-0000-0000-0000-00000000c601',
+  'authenticated', 'authenticated', 'ferenz+kinkeepers-p6@brandlamb.com', '', now(),
+  '{"provider":"email","providers":["email"]}', '{}', now(), now(), '', '', '', ''
+);
+
+insert into auth.identities (id, user_id, provider_id, identity_data, provider, last_sign_in_at, created_at, updated_at) values (
+  gen_random_uuid(), '66666666-0000-0000-0000-00000000c601', '66666666-0000-0000-0000-00000000c601',
+  '{"sub":"66666666-0000-0000-0000-00000000c601","email":"ferenz+kinkeepers-p6@brandlamb.com","email_verified":true,"phone_verified":false}',
+  'email', now(), now(), now()
+);
