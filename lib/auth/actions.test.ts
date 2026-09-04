@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { requestEmailLink, requestSmsCode } from "@/lib/auth/actions";
+import { getRequestOrigin, requestEmailLink, requestSmsCode } from "@/lib/auth/actions";
 
 // Mocked rather than run against the real local stack (this codebase's
 // usual preference) because the bug being fixed is specifically about
