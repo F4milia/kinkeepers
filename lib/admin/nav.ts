@@ -25,6 +25,18 @@ export const ADMIN_NAV_ITEMS: AdminNavItem[] = [
     allowedRoles: ["admin"],
   },
   {
+    href: "/admin/refer",
+    label: () => "Refer someone",
+    // partner_staff only, matching createStaffReferral()'s own
+    // requireRole gate - admin has no partner_organization_id to scope
+    // a referral to, and isn't the persona P2's staff-form path
+    // describes ("a care navigator at a partner organization"). Found
+    // missing from this list entirely during a 2026-09-04
+    // acceptance-criteria audit of P2 - the Server Action existed and
+    // was tested, but nothing in the nav or app routes ever called it.
+    allowedRoles: ["partner_staff"],
+  },
+  {
     href: "/admin/partners",
     label: () => "Partner organizations",
     allowedRoles: ["admin"],
