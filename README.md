@@ -58,6 +58,16 @@ against the same machine, they share the same local database. Whoever runs
 `db:reset` needs the full current `supabase/migrations/` directory, not just
 their own new files, or it silently drops schema the other stream depends on.
 
+**Test magic-link sign-in locally via `http://localhost:3000`, not
+`http://127.0.0.1:3000`.** `next dev`'s own internal request handling
+normalizes a Route Handler's computed origin to `localhost` on redirect,
+even when the actual request arrived on `127.0.0.1` - so `/auth/callback`'s
+own redirect after a successful code exchange lands the browser on a
+different origin than the one that just got a session cookie, and the very
+next request looks signed-out. Sticking to `localhost:3000` end to end
+avoids it entirely; this is a `next dev` quirk, not something visible in a
+real deployment (Vercel serves one canonical domain, no such ambiguity).
+
 ## Learn More
 
 To learn more about Next.js, take a look at the following resources:
