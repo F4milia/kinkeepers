@@ -16,6 +16,15 @@ export interface QueuedApplicant {
   timeZone: string | null;
   referralSource: string;
   daysWaiting: number;
+  availabilityWindows: string[];
+}
+
+// availability_windows is stored as a plain jsonb string array (see
+// lib/referral/actions.ts's saveIntakeProgress) - narrowed the same way
+// the intake form's own asStringArray() does, since Postgres returns it
+// as unknown until validated.
+function asStringArray(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((v): v is string => typeof v === "string") : [];
 }
 
 export interface DeclinedApplicant extends QueuedApplicant {
@@ -35,7 +44,7 @@ export async function listPendingReviewApplicants(
   const { data, error } = await admin
     .from("applicants")
     .select(
-      "id, first_name, last_name, relationship, care_recipient_stage, time_zone, referral_source, pending_review_since",
+      "id, first_name, last_name, relationship, care_recipient_stage, time_zone, referral_source, pending_review_since, availability_windows",
     )
     .eq("status", "pending_review")
     .order("pending_review_since", { ascending: true, nullsFirst: false });
@@ -51,6 +60,7 @@ export async function listPendingReviewApplicants(
     timeZone: row.time_zone,
     referralSource: row.referral_source,
     daysWaiting: daysSince(row.pending_review_since),
+    availabilityWindows: asStringArray(row.availability_windows),
   }));
 }
 
@@ -60,7 +70,7 @@ export async function listDeclinedApplicants(callerClient?: SupabaseClient): Pro
   const { data, error } = await admin
     .from("applicants")
     .select(
-      "id, first_name, last_name, relationship, care_recipient_stage, time_zone, referral_source, pending_review_since, decline_reason",
+      "id, first_name, last_name, relationship, care_recipient_stage, time_zone, referral_source, pending_review_since, decline_reason, availability_windows",
     )
     .eq("status", "declined")
     .order("pending_review_since", { ascending: true, nullsFirst: false });
@@ -77,6 +87,7 @@ export async function listDeclinedApplicants(callerClient?: SupabaseClient): Pro
     referralSource: row.referral_source,
     daysWaiting: daysSince(row.pending_review_since),
     declineReason: row.decline_reason,
+    availabilityWindows: asStringArray(row.availability_windows),
   }));
 }
 
@@ -93,7 +104,7 @@ export async function getApplicantById(
   const { data, error } = await admin
     .from("applicants")
     .select(
-      "id, first_name, last_name, relationship, care_recipient_stage, time_zone, referral_source, pending_review_since, status",
+      "id, first_name, last_name, relationship, care_recipient_stage, time_zone, referral_source, pending_review_since, status, availability_windows",
     )
     .eq("id", applicantId)
     .maybeSingle();
@@ -110,6 +121,7 @@ export async function getApplicantById(
     referralSource: data.referral_source,
     daysWaiting: daysSince(data.pending_review_since),
     status: data.status,
+    availabilityWindows: asStringArray(data.availability_windows),
   };
 }
 
