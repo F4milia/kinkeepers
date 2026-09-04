@@ -22,22 +22,34 @@ This project uses [`next/font`](https://nextjs.org/docs/app/building-your-applic
 
 ## Environments
 
-Pre-launch, there is one hosted Supabase project (`lupiicjafzrbihaosezv`), and it
-serves as staging. There is no separate production project yet — provisioning
-one, and the cutover, is R1's job (Wave 10), completing before cohort one's
-first live session. Until then, "staging" and "the hosted project" are the same
-thing; don't assume a prod/staging split exists elsewhere in config or docs.
+As of R1's production cutover, there are two genuinely separate hosted
+Supabase projects: staging (`lupiicjafzrbihaosezv` — the original hosted
+project, now Preview-only) and production (`vnadfnnckmkswfrzfjkj`, wired to
+Vercel's Production environment only). A code deploy never moves data
+between them. Every open PR's preview deployment reads and writes staging;
+only the real production site reads and writes production. See CLAUDE.md's
+Architecture notes for the full cutover record, including the dashboard-only
+config (Auth URL settings, custom SMTP, admin role grants) that does NOT
+carry over automatically when a new Supabase project is provisioned.
 
 **One-command reset:** `npm run db:reset` (local Docker stack) or
 `npm run db:reset:staging` (the linked hosted project — requires
-`supabase link` first). Both drop and recreate the database from
-`supabase/migrations/` and reseed from `supabase/seed.sql`, so they're safe
-to run repeatedly.
+`supabase link` first, and links to staging, never production). Both drop
+and recreate the database from `supabase/migrations/` and reseed from
+`supabase/seed.sql`, so they're safe to run repeatedly.
 
-**What can't be tested in staging yet:** real outbound Twilio/Resend/Zoom
-delivery — none of those integrations exist yet (they land in P3/P4/X3).
-Once they do, staging must never send a real message to a real person; see
-`lib/messaging/staging-guard.ts` for the mechanism enforcing that.
+**What can't be tested in staging:** Twilio SMS delivery — no Twilio
+credentials are configured in either environment yet, so SMS sign-in stays
+deferred to email-only (see `lib/copy.ts`'s own `sign_in` comment). Resend
+email and Zoom meeting creation both work in staging today, gated by
+`lib/messaging/staging-guard.ts`'s outbound allowlist (`APP_ENV`/
+`STAGING_MESSAGE_ALLOWLIST`, confirmed configured on Vercel's Preview
+environment) so staging never reaches a real caregiver. **Known gap, not yet
+resolved:** staging and production currently share the same Zoom account
+credentials (`ZOOM_ACCOUNT_ID`/`ZOOM_CLIENT_ID`/`ZOOM_CLIENT_SECRET` are
+identical across both Vercel environments) — X1's own requirement for a
+separate staging Zoom app has not actually been provisioned. A staging
+cohort's Zoom meeting is created on the same real account production uses.
 
 **Local Supabase stack is shared, not per-worktree.** `supabase start` /
 `supabase db reset` operate on Docker containers named after `project_id` in
