@@ -78,6 +78,29 @@ Zoom credentials uses them."*
 
 ---
 
+## L1: Sign-in — reviewed with Ferenz 2026-09-04/05
+
+Acceptance (verbatim): *"both methods work end to end against real Supabase
+Auth. Expired link and wrong code both recover without leaving the screen.
+Rate limit message shows the phone number. Grep confirms no password field
+exists. Keyboard operable. AAA contrast. 56px primary action."*
+
+| # | Criterion | Status | Evidence |
+|---|---|---|---|
+| 1 | Both methods work end to end against real Supabase Auth | ⚠️ Amended, now documented | SMS deferred to email-only per Ferenz's own prior instruction (Twilio never configured) - real but previously only recorded in a `lib/copy.ts` comment. 🔧 FIXED: added a proper CLAUDE.md Learned Constraints entry, since it amends Hard Invariant #1 and this file's own workflow rule requires that. Email half confirmed working end to end live (see item 2). |
+| 2 | Expired link and wrong code both recover without leaving the screen | 🔧 FIXED (real bug found and closed) | "Wrong code" is N/A under the SMS deferral (no code-entry UI exists). "Expired link" was a REAL bug, found live: clicking an already-used magic link landed on a confusing generic "We couldn't find that" instead of the sign-in screen's own message - Supabase's `/auth/v1/verify` rejects an expired/reused token by redirecting to the project's Site URL with the failure in a URL **hash fragment**, which never reaches `app/auth/callback/route.ts` at all (hash fragments are client-only). Fixed in PR #137: a small client component (`components/auth/auth-hash-error-redirect.tsx`), mounted in the root layout, reads the hash and routes to `/sign-in?error=link_invalid`. Confirmed live end to end by Ferenz after two false starts (a stale/cached preview build, then a browser extension - Cently - actively breaking `window.location`, confirmed by reproducing the exact scenario locally in a clean Playwright browser where it worked correctly) - a real Incognito test with cookies cleared showed the exact correct "That link has expired or was already used. Send a new one below." |
+| 3 | Rate limit message shows the phone number | ✅ PASS | Real copy substitution, wired to the actual `rate_limited` branch. |
+| 4 | Grep confirms no password field exists | ✅ PASS | Actually run - zero real hits. |
+| 5 | Keyboard operable | ✅ PASS | Real `<input>`/`<button>` elements throughout. |
+| 6 | AAA contrast | ✅ PASS (spot check) | Shared, measured design tokens system-wide. |
+| 7 | 56px primary action | ✅ PASS | `h-14` = 56px. |
+
+**Also found and fixed along the way, unrelated to any single numbered item:** staging's Supabase project had its Auth **Site URL** set to production's own domain (`https://kinkeepers.vercel.app`) - meaning every preview deployment's expired-link error redirect was landing on production, not the preview being tested. Independent of the code fix above, another symptom of the incomplete R1 cutover (staging/production already found to share Zoom credentials too, see X1 above). Ferenz corrected staging's Site URL directly in the dashboard to the stable `main`-branch preview alias, which is what made live-testing this fix possible at all.
+
+**L1 is fully closed.**
+
+---
+
 ## Remaining sessions — automated first-pass findings, not yet walked through together
 
 The rest of this file is what five parallel research passes plus direct
@@ -85,11 +108,6 @@ Vercel/GitHub checks found on 2026-09-04, before Ferenz asked to slow down
 and go session-by-session together instead. Kept here as the starting point
 for each session's own walkthrough — nothing below has been jointly
 confirmed yet, so treat every line as "to verify," not "done."
-
-### L1: Sign-in
-- SMS deferral to email-only is real (Ferenz's own prior instruction) but only documented in a `lib/copy.ts` comment — never added to CLAUDE.md's Learned Constraints despite amending Hard Invariant #1.
-- Everything else (expired-link recovery, rate-limit phone number, no password field via grep, 56px primary action) — PASS.
-- Real end-to-end Supabase Auth round-trip is NEEDS-LIVE-VERIFICATION — all existing tests mock the Supabase client.
 
 ### X5a: RLS test suite, existing boundaries
 - Organization isolation, role escalation — PASS, real JWT-based negative-drill tests.
