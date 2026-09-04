@@ -264,6 +264,23 @@ export const COPY = {
     confirmation: {
       body: "We have your information. Someone will reach out within three business days.",
     },
+    /**
+     * P2's second referral path ("a staff-facing form where a navigator
+     * submits on the caregiver's behalf") had a fully-built, fully-tested
+     * Server Action (createStaffReferral) but no screen calling it -
+     * found during a 2026-09-04 acceptance-criteria audit. Plain
+     * functional labels, same low-risk precedent as the field labels
+     * above - this is an internal /admin screen, not member-facing copy.
+     */
+    staff: {
+      title: "Refer someone",
+      intro: "Create a referral for a caregiver you're working with. They'll finish their own information using the link below.",
+      partner_reference_id_label: "Your reference ID (optional)",
+      submit: "Create referral",
+      success_heading: "Referral created.",
+      success_body: "Share this link with the caregiver so they can finish their information:",
+      create_another: "Create another",
+    },
   },
   /**
    * L3, consent section (notification preferences and account info were

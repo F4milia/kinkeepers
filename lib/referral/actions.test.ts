@@ -1,10 +1,18 @@
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
-import { describe, expect, it, beforeAll, afterAll } from "vitest";
+import { describe, expect, it, beforeAll, afterAll, vi } from "vitest";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { createSelfReferral, createStaffReferral } from "@/lib/referral/actions";
+import { createSelfReferral, createStaffReferral, createStaffReferralAction } from "@/lib/referral/actions";
 import { resolvePartnerBySlug } from "@/lib/referral/data";
 import { ForbiddenError, UnauthenticatedError } from "@/lib/auth/roles";
 import { clientForUser } from "@/test/helpers/local-auth";
+
+// getRequestOrigin() (used by createStaffReferralAction) calls
+// next/headers's headers(), which throws outside a real Next.js request
+// context - same pattern as lib/auth/actions.test.ts and
+// admin-issue-sign-in-link.test.ts.
+vi.mock("next/headers", () => ({
+  headers: async () => ({ get: (name: string) => (name === "host" ? "localhost:3000" : null) }),
+}));
 
 const admin = createAdminClient();
 
@@ -183,5 +191,66 @@ describe("referral capture", () => {
 
     expect(data).toHaveLength(2);
     expect(data!.map((r) => r.referral_source).sort()).toEqual(["partner_link", "staff_form"]);
+  });
+
+  // The Server Action wrapper behind app/admin/refer - found missing
+  // entirely (createStaffReferral existed and was tested above, but no
+  // screen ever called it) during a 2026-09-04 acceptance-criteria audit.
+  describe("createStaffReferralAction", () => {
+    function formDataWith(partnerReferenceId?: string) {
+      const fd = new FormData();
+      if (partnerReferenceId !== undefined) fd.set("partnerReferenceId", partnerReferenceId);
+      return fd;
+    }
+
+    it("returns a resume URL built from the real request origin on success", async () => {
+      const staffClient = await clientForUser(staffUserId);
+      const result = await createStaffReferralAction(
+        { status: "idle", fieldErrors: {} },
+        formDataWith("ext-ref-action-1"),
+        staffClient,
+      );
+      expect(result.status).toBe("success");
+      if (result.status !== "success") throw new Error("expected success");
+      expect(result.resumeUrl).toMatch(/^https:\/\/localhost:3000\/intake\/resume\?token=/);
+
+      const token = new URL(result.resumeUrl!).searchParams.get("token");
+      const { data } = await admin
+        .from("applicants")
+        .select("resume_token, referral_source, partner_reference_id")
+        .eq("resume_token", token)
+        .single();
+      expect(data).toMatchObject({ referral_source: "staff_form", partner_reference_id: "ext-ref-action-1" });
+    });
+
+    it("works identically with no partner reference id", async () => {
+      const staffClient = await clientForUser(staffUserId);
+      const result = await createStaffReferralAction(
+        { status: "idle", fieldErrors: {} },
+        formDataWith(),
+        staffClient,
+      );
+      expect(result.status).toBe("success");
+    });
+
+    it("returns a field error for a partner reference id over 64 characters, without touching the database", async () => {
+      const staffClient = await clientForUser(staffUserId);
+      const result = await createStaffReferralAction(
+        { status: "idle", fieldErrors: {} },
+        formDataWith("x".repeat(65)),
+        staffClient,
+      );
+      expect(result).toEqual({
+        status: "error",
+        fieldErrors: { partnerReferenceId: expect.stringContaining("64 characters") },
+      });
+    });
+
+    it("propagates the role rejection for a non-partner_staff caller", async () => {
+      const memberClient = await clientForUser(memberUserId);
+      await expect(
+        createStaffReferralAction({ status: "idle", fieldErrors: {} }, formDataWith(), memberClient),
+      ).rejects.toThrow(ForbiddenError);
+    });
   });
 });
