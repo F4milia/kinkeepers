@@ -1,6 +1,7 @@
 import "server-only";
 import { Resend } from "resend";
 import { log, logError } from "@/lib/log";
+import { assertOutboundMessageAllowed } from "@/lib/messaging/staging-guard";
 
 // Constructed lazily, inside the function that uses it, not at module
 // scope - a module-scope `new Resend(...)` runs the moment anything
@@ -32,16 +33,34 @@ function getResendClient(): Resend {
 export async function sendResumeEmail(email: string, resumeToken: string, applicantId: string) {
   const resumeUrl = `${process.env.NEXT_PUBLIC_SITE_URL}/intake/resume?token=${resumeToken}`;
 
-  // No RESEND_API_KEY configured (true in every environment as of this
-  // writing - confirmed against the live Vercel project) is not an
-  // exceptional case here, it's the current normal one. The Resend SDK's
-  // constructor throws synchronously on a missing key, which the `if
-  // (error)` check below can't catch (that only covers an error returned
-  // FROM .emails.send(), not a throw before it's ever called) - so without
-  // this try/catch, providing an email during intake would fail the whole
-  // saveIntakeProgress call for every caregiver, everywhere, right now.
-  // Same credential-gap treatment as Zoom/Sentry/Twilio elsewhere in this
-  // codebase: log and no-op rather than crash the feature it's attached to.
+  // L2 audit finding (2026-09-05): this function called Resend directly
+  // with no staging-guard check at all - the exact same gap already found
+  // and fixed in lib/auth/actions.ts's requestEmailLink()/requestSmsCode()
+  // (assertOutboundMessageAllowed() protects every other real send in
+  // this codebase; this one was simply missed). On staging, ANY real
+  // email typed into intake step 1 would have received a real resume-link
+  // email, unconditionally - exactly the "trust failure we cannot undo"
+  // X1's own prompt warns against. Same "log and no-op, never throw"
+  // treatment as a missing RESEND_API_KEY below - a blocked send must not
+  // fail the intake flow it's attached to.
+  try {
+    assertOutboundMessageAllowed(email);
+  } catch {
+    logError("intake_resume_email_failed", { applicant_id: applicantId });
+    return;
+  }
+
+  // RESEND_API_KEY is now configured on the real Vercel project (as of
+  // P1/A1's own 2026-09 audits confirming real sends) - no longer the
+  // universally-missing case an earlier version of this comment claimed.
+  // Still wrapped: the Resend SDK's constructor throws synchronously on a
+  // missing/invalid key, which the `if (error)` check below can't catch
+  // (that only covers an error returned FROM .emails.send(), not a throw
+  // before it's ever called) - a local dev environment with no key set
+  // still needs this to degrade gracefully rather than fail the whole
+  // saveIntakeProgress call. Same credential-gap treatment as Zoom/Sentry
+  // elsewhere in this codebase: log and no-op rather than crash the
+  // feature it's attached to.
   try {
     const { error } = await getResendClient().emails.send({
       from: process.env.RESEND_FROM_EMAIL!,
