@@ -58,6 +58,26 @@ flow. Health check correctly reports a degraded dependency."*
 
 ---
 
+## P3: Zoom for Healthcare integration — reviewed with Ferenz 2026-09-04
+
+Acceptance (verbatim): *"cohort creation produces a recurring meeting with
+all five enforced settings verified via the Zoom API. Join URL and dial-in
+stored per session. Participant report pulls and pre-fills. Attendance
+cannot be committed without a facilitator action. A cohort with its own
+Zoom credentials uses them."*
+
+| # | Criterion | Status | Evidence |
+|---|---|---|---|
+| 1 | All five enforced settings via the Zoom API | 🚩 FLAGGED — 4 of 5 | `lib/zoom/meeting.ts` sends `auto_recording: "none"`, `waiting_room: true`, `join_before_host: false`, and a required password. Screen-share host-only is NOT sent - researched, not guessed: Zoom's meeting-creation API has no documented per-meeting field for it at all, every source treats it as account/user-level only. Not fixable in code - needs Ivan to confirm it's already an account-level default on the real Zoom Healthcare account, or set it there if not (Account Settings → In Meeting (Basic) → Screen Sharing). |
+| 2 | Join URL and dial-in stored per session | ✅ PASS | `finalize_cohort_sessions()` writes them per session row; real DB-backed test confirms 3 real rows each carry a distinct value. |
+| 3 | Participant report pulls and pre-fills | ✅ PASS | Real Zoom participant-report pull, matched to applicants by email then phone, never auto-commits. |
+| 4 | Attendance cannot be committed without a facilitator action | ✅ PASS | `submit_session_log` is `service_role`-only; exactly one application code path calls it, gated by role + ownership check. |
+| 5 | A cohort with its own Zoom credentials uses them | ✅ PASS | Real test proves the actual OAuth header sent to Zoom was built from the partner's own credentials, not just that a DB row exists. |
+
+**Closed for now.** Item 1 is the only open item, and it's genuinely Ivan's call, not code - see the question drafted above for how to ask him. Everything else on P3 is a clean pass.
+
+---
+
 ## Remaining sessions — automated first-pass findings, not yet walked through together
 
 The rest of this file is what five parallel research passes plus direct
@@ -65,13 +85,6 @@ Vercel/GitHub checks found on 2026-09-04, before Ferenz asked to slow down
 and go session-by-session together instead. Kept here as the starting point
 for each session's own walkthrough — nothing below has been jointly
 confirmed yet, so treat every line as "to verify," not "done."
-
-### P3: Zoom for Healthcare integration
-- 4 of 5 enforced Zoom settings sent via API (auto_recording, waiting_room, join_before_host, password); **screen-share host-only is NOT sent** — Zoom's meeting-creation API has no documented per-meeting field for it (researched, not guessed). Needs Ivan to confirm it's an account-level default, or a live API check.
-- Join URL/dial-in stored per session — PASS, real DB-backed test.
-- Participant report pulls and pre-fills, never auto-commits — PASS.
-- Attendance requires facilitator action — PASS, single real call path confirmed.
-- Partner Zoom credentials actually used when present — PASS, real test proves the mocked fetch's own auth header came from the partner's credentials, not just that a DB row exists.
 
 ### L1: Sign-in
 - SMS deferral to email-only is real (Ferenz's own prior instruction) but only documented in a `lib/copy.ts` comment — never added to CLAUDE.md's Learned Constraints despite amending Hard Invariant #1.
