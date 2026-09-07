@@ -22,7 +22,7 @@ decided scope cut - not a gap)
 Order matches the run doc's own wave order for Stream A: P1, P2, A1, A2, A3,
 P4-pre, P4, P5, A5, L5, X4, R1.
 
-A3 done as of 2026-09-05. P4-pre done as of 2026-09-05. P4 done as of 2026-09-05 (required a 3-PR gap-closure, not just a fix). P5 done as of 2026-09-07. A5 done as of 2026-09-08 (required a 3-PR gap-closure). L5 done as of 2026-09-08. Remaining: X4, R1.
+A3 done as of 2026-09-05. P4-pre done as of 2026-09-05. P4 done as of 2026-09-05 (required a 3-PR gap-closure, not just a fix). P5 done as of 2026-09-07. A5 done as of 2026-09-08 (required a 3-PR gap-closure). L5 done as of 2026-09-08. X4 done as of 2026-09-08. Remaining: R1.
 
 ---
 
@@ -278,3 +278,26 @@ expiry mid-session recovers cleanly."*
 **Also verified beyond the literal acceptance line (the prompt's own body text):** no component needed editing to consume the real data layer (`lib/data.ts`'s functions keep the same signatures every caregiver page already called) - no abstraction leakage, checked directly across four page components. No skeleton/shimmer anywhere (clean grep) - loading states are a plain `"Loading…"` text swap via the shared `Button` component's own `loading` prop, per the design system. A real, working offline cache exists for "the next session details" (`components/session/next-session-cache.ts`, plain `localStorage`, read by the error boundary and written by a client component mounted on Home) - satisfies the prompt's own specific ask, not just the literal acceptance line.
 
 **Verdict: the core data-layer swap (fixtures → real endpoints, no abstraction leakage, honest stubs for two real schema gaps) was already done correctly. Found and fixed four real gaps in the error-handling half: two missing phone numbers, one completely untested acceptance atom (3G usability, now covered by a real throttled test), and one genuine retry-loop architectural bug that could leave a member with an actually-expired session stuck seeing "check your connection" indefinitely instead of being told to sign in again.**
+
+---
+
+## X4: Dial-in identity — audited 2026-09-08
+
+Acceptance (verbatim): *"a phone joiner whose number matches a member
+pre-fills correctly. Numbers with and without country code both match.
+An unknown caller surfaces as unidentified with last four digits and can
+be manually attributed. Dial-in details appear alongside every join
+link in the member UI."*
+
+| # | Criterion | Status | Evidence |
+|---|---|---|---|
+| 1 | A phone joiner whose number matches a member pre-fills correctly | ✅ PASS | `lib/zoom/phone-matching.ts`'s `matchPhoneParticipants()` builds a real `Map` of normalized member phones and does exact-equality lookup against each Zoom participant's (also normalized) reported number - proven end to end by `lib/facilitator/attendance-prefill.test.ts`'s combined scenario ("matches a video joiner by email, a phone joiner by E.164 number, and surfaces an unmatched caller as unidentified"). |
+| 2 | Numbers with and without country code both match | ✅ PASS | `normalizeToE164()` strips all non-digit characters and handles both the bare 10-digit US shape and the 11-digit-with-leading-1 shape, collapsing both to the same `+1XXXXXXXXXX` - direct test coverage: `"matches with and without the country code present."` Never guesses: a non-10/11-digit input returns `null` rather than being forced into a shape that might be wrong (own test: `"never guesses a partial match for a similar-but-different number"`). Applied to BOTH sides of the match (the member's stored phone and the Zoom participant's reported number), not just one - so the column never needing to be literally stored in E.164 at rest is a deliberate, more-robust design choice (documented in the function's own comment), not a gap. |
+| 3 | An unknown caller surfaces as unidentified with last four digits and can be manually attributed | ✅ PASS | `PhoneMatchResult`'s `last4` is explicitly "never the full number." `components/facilitator/session-log.tsx` renders `"Unidentified caller — {last4}"` with a real `<select>` listing every real roster member; `attributeCaller()` writes the chosen applicant directly into the same `attendance` state the actual submission uses - a real attribution, not a decorative dropdown. |
+| 4 | Dial-in details appear alongside every join link in the member UI | 🔧 FIXED (structural risk, not yet a live failure) | True today at all three existing call sites (Home, session detail, the offline-cache error view) - but only because each one separately remembered to render `<DialInDetails>` as a sibling of `<JoinAction>`; `JoinAction` itself rendered nothing dial-in-related. A fourth call site could easily have forgotten, silently violating this exact acceptance line with no test catching it (zero component-render tests exist anywhere in this codebase, and no e2e test asserted dial-in text presence before this pass). Fixed by moving `DialInDetails` inside `JoinAction` itself - correct by construction now, not by call-site discipline - and updating all three call sites to stop rendering it separately. Verified live: real dial-in number and PIN both render correctly at Home and the session detail page after the refactor. |
+
+**Also verified beyond the literal acceptance line (the prompt's own body text):** the real Zoom participant-report fetch (`lib/zoom/attendance.ts`'s `getAttendancePreFill`) hits Zoom's actual API via a real OAuth token exchange, not a stub - `fetchImpl` is injectable for tests only, exactly the pattern already established elsewhere in this codebase (real callers never pass it). No fuzzy/partial-match logic exists anywhere in the matching code - confirmed by direct code reading, not just the test suite's own claim.
+
+**Not fixable, a genuine external-dependency limit, not a gap:** the "unidentified caller" facilitator UI (the `<select>` attribution flow) has zero automated test coverage, and none is achievable without a real Zoom meeting with a real phone participant - `getSessionAttendancePreFillAction`'s fetch-override parameter exists for tests only, and the real UI component never uses it, so e2e can't fake this path either. Same category of constraint already flagged elsewhere in this project for other Zoom-dependent behavior (e.g. the screen-share-host-only setting, still 🚩 FLAGGED pending Ivan). The underlying matching LOGIC is thoroughly tested (`lib/zoom/phone-matching.test.ts`); only the facilitator-facing React rendering of an unidentified-caller row is untested, and can only ever be verified by hand against a real Zoom call.
+
+**Verdict: the core matching logic (normalization, exact-match-only, unidentified-caller surfacing with manual attribution) was already correct and well-tested. Found and fixed one real structural risk in the dial-in-visibility requirement - true today by coincidence of caller discipline, not enforced by the component itself - by making `JoinAction` render dial-in details intrinsically.**
