@@ -177,6 +177,34 @@ fields collected. AAA contrast, 48px targets, keyboard operable."*
 
 ---
 
+## L3: Consent, preferences, and account — reviewed with Ferenz 2026-09-07/08
+
+Acceptance (verbatim): *"four separate consents captured with versions. A
+version bump prompts re-consent showing what changed, preserving the prior
+record. Preference changes take effect on the next reminder. Deletion and
+export requests create queue items with on-screen confirmation.
+Confidentiality line visible on the discussion screen."*
+
+| # | Criterion | Status | Evidence |
+|---|---|---|---|
+| 1 | Four separate consents captured with versions | ✅ PASS | `ConsentDocumentSection` renders one section per document, each its own checkbox and its own `recordConsent(documentType, version)` call. |
+| 1a | (fuller prompt) "Group confidentiality gets its own screen and its own moment" | 🔧 FIXED | Was a shared intro paragraph on the same `/consent` page as the other three. Split into a dedicated `/consent/confidentiality` screen, reached via a "Continue" action once the first three are agreed; the Discussion screen's confidentiality line now links there directly. |
+| 2 | Version bump prompts re-consent, preserving the prior record | ✅ PASS | `getConsentStatus()` keys status by `(document_type, CURRENT version)` - a bump correctly flips status back to pending without touching the prior row (pgTAP-verified under P6). |
+| 2a | (fuller prompt) "...showing what changed, in plain language, at the top" | 🔧 FIXED (real gap found and closed) | Nothing anywhere summarized what changed between versions. Added `consent_documents.change_summary` (nullable, placeholder-until-Ivan convention) and wired the consent screen to show it prominently, only on a genuine re-consent (never on a first-time consent). |
+| 3 | Preference changes take effect on the next reminder | ✅ PASS | Reminder send path selects `preferred_contact_channel` fresh from the DB at send time, never cached. |
+| 4 | Deletion/export requests create queue items with on-screen confirmation | ✅ PASS | Real copy: *"We received your request and will respond within three business days."* Queue creation pgTAP-verified under P6. |
+| 5 | Confidentiality line visible on the discussion screen | ✅ PASS | Discussion page links the dedicated confidentiality screen with the exact "quiet line" copy. |
+| 6 | Consent presented after cohort assignment, before the first session | 🔧 FIXED (real bug found and closed) | Confirmed live: nothing routed a newly-assigned member to `/consent` at all - signing in after assignment just landed on plain Home. Root cause was two layers deep: `claim_applicant_for_current_user()` only ever matched already-enrolled applicants, so a pre-enrollment sign-in never even resolved to an applicant row; and `getViewer()` never checked consent status at all. Fixed both - see the two entries below. |
+
+**Two real bugs found and fixed alongside item 6, both confirmed live end to end with Playwright against the local stack (real magic-link sign-in via Mailpit, a real admin cohort assignment, real consent submission):**
+
+- `claim_applicant_for_current_user()` (L5's identity bridge) was scoped to `cohort_id is not null and status in ('enrolled', 'attending', 'completed')` - a real `pending_review`/`intake_complete`/`referred` applicant's first sign-in could never resolve to their own applicant row, 404ing before any downstream check ran. Widened to match every status except `declined`/`withdrawn` (which stay deliberately unclaimable - a real negative-test drill confirms this). A new fixture, Dana Whitfield (`pending_review`, no cohort), was added to `seed.sql`/`docs/qa/FIXTURES.md` specifically to make this state testable at all.
+- `getViewer()` (`lib/data.ts`) hard-404d a member with no `cohort_id` instead of routing to the existing `/status/[applicantId]` screen, and never checked outstanding consent. Now redirects to `/status/[applicantId]` (no cohort yet) or `/consent` (cohort assigned, consent outstanding) - covering every caller (Home, Discussion, Cohort) from one choke point.
+
+**L3 is fully closed.**
+
+---
+
 ## Remaining sessions — automated first-pass findings, not yet walked through together
 
 The rest of this file is what five parallel research passes plus direct
@@ -184,20 +212,6 @@ Vercel/GitHub checks found on 2026-09-04, before Ferenz asked to slow down
 and go session-by-session together instead. Kept here as the starting point
 for each session's own walkthrough — nothing below has been jointly
 confirmed yet, so treat every line as "to verify," not "done."
-
-### L2: Referral landing and intake
-- Partner-scoped referral attribution, back-navigation, "I'm not sure," 3 steps/9 fields, no prohibited fields — PASS.
-- Cross-device resume (via emailed resume link, not localStorage) — mechanism is real and correctly DB-backed, but `send-resume-email.ts` carries a stale comment claiming `RESEND_API_KEY` was "never configured," contradicted elsewhere in the codebase. No test confirms a real send occurs.
-### P6: Consent and legal surfaces
-- Version bump preserves prior record, consent history retrievable, deletion request creates admin queue item — PASS.
-- **`member_consents.ip_hash` column exists but is never populated** — `recordConsent()` never wires it in, despite the acceptance text explicitly requiring "from what IP hash," and a working `hashRequestIp()` helper already used elsewhere in the codebase.
-- Whether consent is presented at the *correct lifecycle moment* (not just that `/consent` is reachable) is NEEDS-LIVE-VERIFICATION.
-
-### L3: Consent, preferences, and account
-- Four consents with own checkboxes, preference-takes-effect-on-next-reminder, deletion/export on-screen confirmation, confidentiality line on discussion screen — PASS.
-- **Re-consent flow never shows "what changed, in plain language, at the top"** on a version bump — a distinct requirement from the original prompt, genuinely absent from the UI and the copy deck. Needs real per-version change-summary content — a copy/product decision, not something to invent.
-- **CONFIRMED LIVE (2026-09-07), a real bug, not just a hypothesis:** L3's own acceptance line ("Presented at enrollment, after cohort assignment, before the first session") is completely unimplemented — there is no gate, redirect, or prompt anywhere that routes a newly-assigned member to `/consent`. Verified against a real staging fixture (Dana Whitfield, seeded pre-assignment): signed in before assignment, had a real admin assign her to a cohort live, signed in again — landed on the plain Home screen ("No meetings scheduled yet") with zero mention of consent. `/consent` exists and presumably works if a member navigates there directly, but nothing ever sends them there.
-- **Also found live while testing the above, a related but distinct bug:** `getViewer()` (`lib/data.ts:101`) hard-404s any signed-in member whose `applicants.cohort_id` is still null — so a real applicant who is `pending_review`/`intake_complete` and signs in before being assigned gets the flat "We couldn't find that" page, not the `/status/[applicantId]` waiting-for-review screen that already exists in the codebase (`app/(applicant)/status/[applicantId]/page.tsx`). Nothing in the normal sign-in path (`roleHomePath()` always returns `"/"` for role `member`, with no assignment check) ever routes a signed-in member there. Likely shares root cause/ownership with the consent-gate gap above (both are "what does a signed-in member without a cohort see" questions) - worth fixing together when L3 gets its full audit turn.
 
 ### L4: Waitlist and program states
 - All four states are coded and do branch on real DB status — PASS mechanically.
