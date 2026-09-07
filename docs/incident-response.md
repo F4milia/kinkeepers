@@ -1,12 +1,22 @@
 # Incident response — a bad merge reaches production
 
-One page, plain language, for whoever is on when this happens. There is
-currently one hosted Supabase project (`lupiicjafzrbihaosezv`) serving as
-both the only live environment and what the rest of this repo's docs call
-"staging" - see `README.md`'s Environments section. Until a real,
-separate production project is provisioned and cut over to (R1's larger,
-not-yet-started scope), **every deploy is a production deploy** - there
-is no lower-stakes environment a bad merge could land in first.
+One page, plain language, for whoever is on when this happens. As of
+R1's production cutover (2026-09-04), there are two genuinely separate
+hosted Supabase projects: staging (`lupiicjafzrbihaosezv`, wired to
+Vercel's Preview environment only) and production (`vnadfnnckmkswfrzfjkj`,
+wired to Vercel's Production environment only) - see `README.md`'s
+Environments section for the full detail. A code deploy never moves data
+between them, and every open PR's preview deployment reads and writes
+staging, never production. This means a bad merge reaching a PR's preview
+build is not yet an incident - the steps below apply once the merge has
+actually reached `main` and Vercel's Production deployment.
+
+**Before relying on this page for a real incident**, read
+`docs/supabase-cutover-checklist.md` if you're unsure whether production's
+dashboard-only configuration (Auth URL settings, custom SMTP, admin role
+grants, session inactivity timeout) is currently correct - none of it is
+visible to `git diff`, `supabase db diff`, or any test suite, and a new
+Supabase project does not inherit any of it automatically.
 
 ## Roles
 
@@ -28,7 +38,22 @@ Vercel deploys automatically from `main` on every merge (confirmed
 working - see CLAUDE.md's Learned Constraints for the incident where this
 silently stopped working for an extended period, and how it was caught
 and fixed). There is no staging deploy step in between: a merged PR is
-live within minutes.
+live within minutes. A merge to `main` is gated on the required `ci`
+check (lint, typecheck, the full pgTAP suite, `npm run test`, `npm run
+build` - see `.github/workflows/ci.yml`; confirmed as an actually
+enforced branch-protection rule via `gh api
+repos/F4milia/kinkeepers/branches/main/protection`, not just a workflow
+that happens to exist) - so "a bad merge reached production" always means
+something the gate itself couldn't catch (a real user-facing bug in
+otherwise-passing code, a dashboard-only config gap, an external API
+behaving differently than assumed), not a skipped check.
+
+**Timing, measured, not assumed:** recent `ci` runs on `main` (`gh run
+list --workflow=ci.yml --branch main`) consistently complete in
+3.5-4.5 minutes; recent Vercel Production deployments (`vercel ls`)
+consistently build in 1-2 minutes. Merging a green PR to a live production
+deploy is well under 10 minutes end to end, checked directly against
+real run history rather than assumed from the pipeline's shape.
 
 ## First response
 
@@ -93,3 +118,23 @@ own standing rule: what broke, why the gates in place (CI, pgTAP,
 review) didn't catch it, and what changed as a result. This page exists
 because of Learned Constraints entries just like the ones it already
 references above - it is not exempt from adding to that record itself.
+
+## Known gap: the rollback drill described above has not been executed
+
+R1's own acceptance criterion calls for a staged rollback drill - deploy,
+migrate, roll back, verify data intact and app healthy, in staging, with
+this page as the drill's real transcript rather than a hypothetical
+procedure. That drill has never actually been run (confirmed via
+`docs/qa/R1-incident-notes-and-rollback-decisions.md`'s own line 7,
+written by R1's original session: "the real production cutover and
+staged rollback drill are held out"). Everything above this section is a
+plain-language procedure, reasoned to be correct, not a record of steps
+that were actually executed and observed to work. Running it deliberately
+- picking one of the "down-path tested" migrations in
+`docs/migration-rollback-decisions.md`, deploying to staging, rolling
+back, and confirming staging's real data survives - is real infrastructure
+work against a shared environment and needs a human (Ferenz or Ivan) to
+schedule and execute it, not an unattended agent pass. Until that happens,
+treat the steps above as reasoned-but-unverified, and update this section
+with the real transcript (what was run, what was observed, timestamps)
+the day it's actually done.
