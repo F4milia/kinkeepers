@@ -673,6 +673,62 @@ function formatWaitlistMeetingTime(availabilityWindows: unknown, timeZone: strin
   return zoneLabel ? `${labels.join(", ")} ${zoneLabel}` : labels.join(", ");
 }
 
+/**
+ * L4 audit gap-closure: hasMatchingCohort was hardcoded true - "no real
+ * signal exists" (confirmed with Ferenz previously). Re-raised by the
+ * strict acceptance audit and reconfirmed directly: a plain existence
+ * check (does ANY cohort currently have real open capacity) is fine,
+ * genuinely different from an auto-matcher - CLAUDE.md invariant #5
+ * forbids software DECIDING who goes where, not surfacing an honest
+ * yes/no signal. The actual assignment stays 100% a human admin action
+ * via listOpenCohortsForApplicant/the assignment picker, completely
+ * unchanged by this.
+ *
+ * Deliberately NOT filtered by grouping_description text-matching against
+ * the applicant's own relationship/stage - that column's own migration
+ * comment says it's free text "not derived from relationship/stage
+ * values... related but not identical," precisely because it was never
+ * meant to be a match target. Fuzzy-matching against it would be
+ * fragile and closer to a real (if crude) matching algorithm than a
+ * plain existence check.
+ *
+ * Deliberately NOT filtered by program license_status either, despite
+ * that seeming like the more literal reading - real cohorts in this
+ * codebase routinely have no program_id at all (see the X2/A2 seed
+ * comments: cohort CREATION requires a licensed program, but an existing
+ * cohort with program_id null is a normal, real, assignable cohort, not
+ * an edge case). Requiring a licensed program here would make this
+ * return false unconditionally with today's data (zero programs are
+ * licensed anywhere in this seed), which is a far bigger, more sweeping
+ * behavior change than "does a cohort exist" was ever meant to be.
+ *
+ * Same occupant-counting shape as listOpenCohortsForApplicant
+ * (lib/admin/assignment.ts) - active occupants exclude declined/
+ * withdrawn, same as that file's own reasoning.
+ */
+async function hasOpenCohortWithCapacity(admin: SupabaseClient): Promise<boolean> {
+  const { data: cohorts, error: cohortsError } = await admin.from("cohorts").select("id, capacity").eq("status", "active");
+  if (cohortsError) throw new DataUnavailableError(cohortsError.message);
+  if (!cohorts || cohorts.length === 0) return false;
+
+  const { data: occupants, error: occupantsError } = await admin
+    .from("applicants")
+    .select("cohort_id, status")
+    .in(
+      "cohort_id",
+      cohorts.map((c) => c.id),
+    );
+  if (occupantsError) throw new DataUnavailableError(occupantsError.message);
+
+  const activeOccupants = (occupants ?? []).filter((o) => o.status !== "declined" && o.status !== "withdrawn");
+  const occupiedCountByCohort = new Map<string, number>();
+  for (const occupant of activeOccupants) {
+    occupiedCountByCohort.set(occupant.cohort_id, (occupiedCountByCohort.get(occupant.cohort_id) ?? 0) + 1);
+  }
+
+  return cohorts.some((cohort) => cohort.capacity - (occupiedCountByCohort.get(cohort.id) ?? 0) > 0);
+}
+
 // L4 audit gap-closure: the "if there's a next program, offer it" half of
 // Program Complete was never built (see the copy deck's own header
 // comment on why). Any OTHER currently-licensed program qualifies -
@@ -715,26 +771,22 @@ export async function getApplicant(applicantId: string, adminClient?: SupabaseCl
 
   const status = data.status as string;
   if (status === "pending_review") {
+    // L4 audit gap-closure (2026-09-08): a real signal now, not
+    // hardcoded true - see hasOpenCohortWithCapacity's own comment for
+    // exactly what this does and does not check, and why (invariant #5,
+    // grouping_description not being a match target, program licensing
+    // not being a real gate on cohort existence today).
+    // app/(applicant)/status/[applicantId]/page.tsx's ternary is
+    // `hasMatchingCohort ? WaitingForReview : Waitlisted` - Waitlisted is
+    // the MORE specific state ("you're on the list, waiting for
+    // {grouping}"), reached only once a real signal says no cohort has
+    // room right now.
+    const hasMatchingCohort = await hasOpenCohortWithCapacity(admin);
     return {
       id: data.id,
       firstName: data.first_name ?? "",
       status: "pending_review",
-      // No real "does an open cohort exist for this applicant" signal
-      // exists (confirmed with Ferenz - see this PR's description) -
-      // always the same value rather than guessing, so every real
-      // pending_review applicant renders the same non-specific state.
-      //
-      // true, not false: app/(applicant)/status/[applicantId]/page.tsx's
-      // ternary is `hasMatchingCohort ? WaitingForReview : Waitlisted`,
-      // and Waitlisted additionally requires waitlistGroupingLabel/
-      // meetingTimeLabel to render sensibly - it's the MORE specific
-      // state ("you're on the list, waiting for {grouping}"), not the
-      // generic one. true reaches WaitingForReview ("we're finding your
-      // group"), the non-specific message that was actually confirmed.
-      // Caught by Stream B while rebasing against this file - shipped as
-      // false originally, a real boolean inversion, not a pre-existing
-      // bug in the ternary itself.
-      hasMatchingCohort: true,
+      hasMatchingCohort,
       waitlistGroupingLabel: formatWaitlistGrouping(data.relationship, data.care_recipient_stage),
       meetingTimeLabel: formatWaitlistMeetingTime(data.availability_windows, data.time_zone),
     };

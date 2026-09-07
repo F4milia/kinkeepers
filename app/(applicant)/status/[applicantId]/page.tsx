@@ -34,20 +34,36 @@ export default async function ApplicantStatusPage({
   notFound();
 }
 
+// L4 audit gap-closure: the run doc's own prompt text is explicit -
+// "Offer the 800 number. Someone waiting three weeks may need to talk to
+// a person now" - for both of these two states specifically. The header's
+// "Get help now" button already reaches it in one click (e2e-tested
+// separately), but that's not literal static text on the page itself.
+// Same plain-text treatment error-state.tsx already gives it, reusing
+// the same copy key rather than a near-duplicate.
+function CallForHelpLine() {
+  return (
+    <p className="text-meta font-ui text-ink-soft">
+      {format(COPY.errors.call_for_help, { phoneNumber: COPY.support.phoneNumber })}
+    </p>
+  );
+}
+
 function WaitingForReview() {
   return (
-    <Card>
+    <Card className="flex flex-col items-center gap-2">
       <EmptyState
         headline={COPY.applicant.waiting_review.headline}
         body={COPY.applicant.waiting_review.body}
       />
+      <CallForHelpLine />
     </Card>
   );
 }
 
 function Waitlisted({ applicant }: { applicant: Applicant }) {
   return (
-    <Card>
+    <Card className="flex flex-col items-center gap-2">
       <EmptyState
         headline={COPY.applicant.waitlisted.headline}
         body={format(COPY.applicant.waitlisted.body, {
@@ -55,6 +71,7 @@ function Waitlisted({ applicant }: { applicant: Applicant }) {
           meetingTime: applicant.meetingTimeLabel ?? "",
         })}
       />
+      <CallForHelpLine />
     </Card>
   );
 }
