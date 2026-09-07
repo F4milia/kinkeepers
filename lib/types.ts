@@ -196,4 +196,6 @@ export interface Applicant {
   meetingTimeLabel?: string;
   assignedSession?: AssignedSession;
   completedProgramName?: string;
+  /** Set only when a real, currently-licensed program other than the one just completed exists. */
+  nextProgramName?: string;
 }

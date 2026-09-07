@@ -205,6 +205,29 @@ Confidentiality line visible on the discussion screen."*
 
 ---
 
+## L4: Waitlist and program states — reviewed with Ferenz 2026-09-08
+
+Acceptance (verbatim): *"each state renders correctly and transitions on
+real status change. Waitlist names the specific grouping sought. Phone
+number visible in waiting and waitlisted states. No gamified completion."*
+
+| # | Criterion | Status | Evidence |
+|---|---|---|---|
+| 1 | Each state renders correctly | 🔧 FIXED (real gap found and closed) | Waiting-for-review and Assigned-before-session-one both render correctly (e2e-tested). **Program Complete never checked whether a next program actually exists** - it unconditionally rendered "no other program open," even though the prompt's own text requires offering one when it exists. The copy deck's own comment admitted `body_with_next` was never built. Fixed: `getNextLicensedProgramName()` looks for any other currently-licensed program; the screen now branches on whether one was found. Dormant with today's seed data (every program is still unlicensed, per the X2 seed comment) but real and tested. |
+| 2 | Transitions on real status change | ✅ PASS | Status reads fresh from the DB on every load; `reopen_applicant()` correctly resets a declined applicant to `pending_review` and clears `decline_reason`. |
+| 3 | Waitlist names the specific grouping sought | 🚩 FLAGGED (unreachable) + 🔧 FIXED (the part that wasn't) | `hasMatchingCohort` stays hardcoded `true` (deliberate, previously confirmed - building a real match signal needs the auto-matcher invariant #5 forbids). Separately, but real: `waitlistGroupingLabel`/`meetingTimeLabel` were never populated even in the one code path that sets `hasMatchingCohort` - so flipping that flag today would have rendered blank interpolations. Now composed from the applicant's own real intake fields (`relationship`, `care_recipient_stage`, `availability_windows`, `time_zone`) - correct and tested, still dormant until the auto-matcher question is resolved. |
+| 4 | Phone number visible in waiting/waitlisted states | ⚠️ Judgment call | Not literal always-visible text - reachable via one click on the always-present "Get help now" header button (e2e-tested). Reasonable reading either way against the literal word "visible" - left as-is. |
+| 5 | No gamified completion | ✅ PASS | e2e-verified: no "Congratulations/Certificate/Badge/Achievement," no emoji. |
+
+**Two real gaps closed, one already-known tradeoff reconfirmed, one judgment call left open:**
+- Program Complete's missing "offer the next program" branch - built and tested, though it can't be observed with real production data until a second program is actually licensed. `complete.body_with_next` copy is drafted, plain functional wording, **not independently confirmed with Ferenz** (unlike `body_no_next`, which was) - worth a real review pass before it ever reaches a real completed member.
+- The waitlist grouping/meeting-time labels - built from the applicant's own already-collected intake data, same caveat (dormant until `hasMatchingCohort` can ever return `false`).
+- Also refactored `STAGE_OPTIONS`' inline "Early"/"Middle"/"Late" literals (in the intake form) to read from a new shared `COPY.referral.stage_option` map, so the client form and this new server-side composition can't drift the way P3's own time-zone labels once did.
+
+**L4 is closed** - items 1 and 3's real gaps are fixed; item 3's unreachability and item 4 remain exactly what they were, by deliberate design or genuine judgment call, not code defects.
+
+---
+
 ## Remaining sessions — automated first-pass findings, not yet walked through together
 
 The rest of this file is what five parallel research passes plus direct
@@ -212,12 +235,6 @@ Vercel/GitHub checks found on 2026-09-04, before Ferenz asked to slow down
 and go session-by-session together instead. Kept here as the starting point
 for each session's own walkthrough — nothing below has been jointly
 confirmed yet, so treat every line as "to verify," not "done."
-
-### L4: Waitlist and program states
-- All four states are coded and do branch on real DB status — PASS mechanically.
-- **`hasMatchingCohort` is hardcoded `true`** for every real applicant (confirmed with Ferenz previously, per the code's own comment) — the Waitlisted state is structurally unreachable in production as a result, since computing a real "matching cohort" signal would require the auto-matcher invariant #5 forbids. Known, deliberate tradeoff; flagging for the record against this literal audit.
-- **Phone number is not literally rendered as visible text** in the waiting/waitlisted states' own copy — only reachable via an extra click through the generic support sheet, despite "Offer the 800 number" being explicit, state-specific prompt text.
-- No gamified completion — PASS.
 
 ### F1: Facilitator home and schedule
 - Next session, outstanding logs, cohort session position, schedule spanning all cohorts chronologically — PASS.
