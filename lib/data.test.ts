@@ -302,10 +302,70 @@ describe("getApplicant (L4, against the real seeded rows in supabase/seed.sql)",
   // meeting ."). No test caught it because the only prior coverage was
   // an e2e smoke test asserting "no client-side error," which is true
   // for both branches - this test asserts the actual value instead.
+  //
+  // hasMatchingCohort is a real computed signal now (L4 audit
+  // gap-closure, 2026-09-08), not hardcoded - this seeded applicant's
+  // `true` is genuine: seed.sql's real active cohorts (L5 Demo Cohort,
+  // Renata's Cohort) both have real remaining capacity. A dedicated,
+  // isolated fixture below proves the underlying capacity computation
+  // itself, rather than relying on this coincidence alone.
   it("returns hasMatchingCohort: true for a pending_review applicant - the generic 'still finding' state, not the specific waitlist one", async () => {
     const applicant = await getApplicant("88888888-0000-0000-0000-000000000001", admin);
     expect(applicant?.status).toBe("pending_review");
     expect(applicant?.hasMatchingCohort).toBe(true);
+  });
+
+  // hasOpenCohortWithCapacity() queries the ENTIRE cohorts table with no
+  // scoping (by design - "does a matching cohort exist ANYWHERE" is a
+  // genuinely global question) - which means, unlike most fixtures in
+  // this file, there's no way to reliably assert the FALSE case: many
+  // other test files in this shared, concurrently-run database commit
+  // their own real 'active' cohorts with real capacity for their own
+  // file's lifetime (the exact shared-global-table shape already found
+  // for consent_documents and programs elsewhere in this file). Asserting
+  // "no cohort anywhere has room" would be exactly as unreliable as those
+  // were. This proves the TRUE branch instead, with a dedicated fixture
+  // guaranteed to have real spare capacity regardless of what else is
+  // running concurrently.
+  it("a fresh cohort with real spare capacity makes hasMatchingCohort true", async () => {
+    const { data: org } = await admin.from("partner_organizations").select("id").eq("name", "Riverside Health Network").single();
+    const { data: cohort, error: cohortError } = await admin
+      .from("cohorts")
+      .insert({
+        name: "L4 Test Cohort (has room)",
+        grouping_description: "x",
+        capacity: 1,
+        cadence: "weekly",
+        meeting_day_of_week: 2,
+        meeting_time: "18:30",
+        time_zone: "America/New_York",
+        status: "active",
+      })
+      .select("id")
+      .single();
+    if (cohortError || !cohort) throw cohortError ?? new Error("failed to create cohort");
+
+    const { data: applicantRow, error: applicantError } = await admin
+      .from("applicants")
+      .insert({
+        partner_organization_id: org!.id,
+        referral_source: "partner_link",
+        first_name: "Priya",
+        last_name: "Test",
+        email: `l4-capacity-test-${Date.now()}@example.com`,
+        status: "pending_review",
+      })
+      .select("id")
+      .single();
+    if (applicantError || !applicantRow) throw applicantError ?? new Error("failed to create applicant");
+
+    try {
+      const applicant = await getApplicant(applicantRow.id, admin);
+      expect(applicant?.hasMatchingCohort).toBe(true);
+    } finally {
+      await admin.from("applicants").delete().eq("id", applicantRow.id);
+      await admin.from("cohorts").delete().eq("id", cohort.id);
+    }
   });
 
   // L4 audit gap-closure: waitlistGroupingLabel/meetingTimeLabel are
