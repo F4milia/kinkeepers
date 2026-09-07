@@ -34,6 +34,7 @@ import { DataUnavailableError } from "@/lib/data-errors";
 import { memberNeedsConsent } from "@/lib/consent/data";
 import { sessionDateTimeFields, zoneFriendlyLabel } from "@/lib/session-time";
 import { computeCertificationExpiryStatus } from "@/lib/certification-status";
+import { COPY } from "@/lib/copy";
 import type {
   Applicant,
   AttendanceStatus,
@@ -638,6 +639,58 @@ export async function getMyCertifications(callerClient?: SupabaseClient): Promis
 // testability reasoning as callerClient elsewhere in this file.
 // ---------------------------------------------------------------------
 
+// L4 audit gap-closure: composes the waitlisted sentence's "grouping"
+// half from the applicant's own already-collected intake fields
+// (relationship is free text, per the intake form - never a fixed set of
+// options - so this reads it back verbatim, not through a lookup table).
+// Dormant today (hasMatchingCohort is still hardcoded true below, a
+// separate and deliberate tradeoff - see that comment), but built
+// correctly now rather than left blank for whenever that flag can
+// legitimately return false. Drafted phrasing, not independently
+// confirmed with Ferenz the way the type's own JSDoc example was -
+// worth a real review pass before this is ever actually reachable.
+function formatWaitlistGrouping(relationship: string | null, stage: string | null): string | undefined {
+  if (!relationship) return undefined;
+  const stageLabel =
+    stage && stage !== "unsure" ? COPY.referral.stage_option[stage as "early" | "middle" | "late"] : undefined;
+  return stageLabel ? `${relationship} caregivers in the ${stageLabel.toLowerCase()} stage` : `${relationship} caregivers`;
+}
+
+// Same reasoning as formatWaitlistGrouping above - the "meeting {x}" half,
+// from the applicant's own availability_windows/time_zone. Reuses
+// COPY.referral.availability_option, the same map the admin queue's own
+// formatAvailability() (app/admin/applicants/page.tsx) already reads from,
+// rather than a third independent copy of this join logic.
+function formatWaitlistMeetingTime(availabilityWindows: unknown, timeZone: string | null): string | undefined {
+  const windows = Array.isArray(availabilityWindows)
+    ? availabilityWindows.filter((w): w is string => typeof w === "string")
+    : [];
+  if (windows.length === 0) return undefined;
+  const labels = windows.map(
+    (w) => COPY.referral.availability_option[w as keyof typeof COPY.referral.availability_option] ?? w,
+  );
+  const zoneLabel = timeZone ? zoneFriendlyLabel(timeZone) : "";
+  return zoneLabel ? `${labels.join(", ")} ${zoneLabel}` : labels.join(", ");
+}
+
+// L4 audit gap-closure: the "if there's a next program, offer it" half of
+// Program Complete was never built (see the copy deck's own header
+// comment on why). Any OTHER currently-licensed program qualifies -
+// deterministic order (by name) so this is stable, not "whichever the
+// query happens to return first." Dormant with today's seed data (every
+// program is still unlicensed, see the X2 seed comment) - correct and
+// tested, not yet observable in production.
+async function getNextLicensedProgramName(
+  admin: SupabaseClient,
+  excludeProgramId: string | undefined,
+): Promise<string | undefined> {
+  let query = admin.from("programs").select("name").eq("license_status", "licensed").order("name").limit(1);
+  if (excludeProgramId) query = query.neq("id", excludeProgramId);
+  const { data, error } = await query.maybeSingle();
+  if (error) throw new DataUnavailableError(error.message);
+  return data?.name;
+}
+
 export async function getApplicant(applicantId: string, adminClient?: SupabaseClient): Promise<Applicant | undefined> {
   // A malformed id (a stale bookmark, a fixture-era slug from before this
   // route had a real backend) should read as "not found," not a raw
@@ -652,7 +705,9 @@ export async function getApplicant(applicantId: string, adminClient?: SupabaseCl
   // (nonexistent) direct one.
   const { data, error } = await admin
     .from("applicants")
-    .select("id, first_name, status, cohort:cohorts(programs(name))")
+    .select(
+      "id, first_name, status, relationship, care_recipient_stage, availability_windows, time_zone, cohort:cohorts(programs(id, name))",
+    )
     .eq("id", applicantId)
     .maybeSingle();
   if (error) throw new DataUnavailableError(error.message);
@@ -672,14 +727,16 @@ export async function getApplicant(applicantId: string, adminClient?: SupabaseCl
       // true, not false: app/(applicant)/status/[applicantId]/page.tsx's
       // ternary is `hasMatchingCohort ? WaitingForReview : Waitlisted`,
       // and Waitlisted additionally requires waitlistGroupingLabel/
-      // meetingTimeLabel (never set here) to render sensibly - it's the
-      // MORE specific state ("you're on the list, waiting for {grouping}"),
-      // not the generic one. true reaches WaitingForReview ("we're
-      // finding your group"), the non-specific message that was actually
-      // confirmed. Caught by Stream B while rebasing against this file -
-      // shipped as false originally, a real boolean inversion, not a
-      // pre-existing bug in the ternary itself.
+      // meetingTimeLabel to render sensibly - it's the MORE specific
+      // state ("you're on the list, waiting for {grouping}"), not the
+      // generic one. true reaches WaitingForReview ("we're finding your
+      // group"), the non-specific message that was actually confirmed.
+      // Caught by Stream B while rebasing against this file - shipped as
+      // false originally, a real boolean inversion, not a pre-existing
+      // bug in the ternary itself.
       hasMatchingCohort: true,
+      waitlistGroupingLabel: formatWaitlistGrouping(data.relationship, data.care_recipient_stage),
+      meetingTimeLabel: formatWaitlistMeetingTime(data.availability_windows, data.time_zone),
     };
   }
 
@@ -689,12 +746,14 @@ export async function getApplicant(applicantId: string, adminClient?: SupabaseCl
   }
 
   if (status === "completed") {
-    const cohort = data.cohort as unknown as { programs: { name: string } | null } | null;
+    const cohort = data.cohort as unknown as { programs: { id: string; name: string } | null } | null;
+    const nextProgramName = await getNextLicensedProgramName(admin, cohort?.programs?.id);
     return {
       id: data.id,
       firstName: data.first_name ?? "",
       status: "completed",
       completedProgramName: cohort?.programs?.name,
+      nextProgramName,
     };
   }
 

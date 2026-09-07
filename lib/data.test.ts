@@ -308,6 +308,51 @@ describe("getApplicant (L4, against the real seeded rows in supabase/seed.sql)",
     expect(applicant?.hasMatchingCohort).toBe(true);
   });
 
+  // L4 audit gap-closure: waitlistGroupingLabel/meetingTimeLabel are
+  // still dormant today (hasMatchingCohort stays hardcoded true above),
+  // but built correctly from the applicant's own real intake fields -
+  // this proves the composition itself, independent of whether the
+  // Waitlisted branch is currently reachable. Miriam (seeded above) has
+  // no availability_windows set, so meetingTimeLabel is correctly absent
+  // rather than a dangling "meeting ." fragment.
+  it("composes waitlistGroupingLabel from the applicant's own relationship/stage, and omits meetingTimeLabel when no availability was given", async () => {
+    const applicant = await getApplicant("88888888-0000-0000-0000-000000000001", admin);
+    expect(applicant?.waitlistGroupingLabel).toBe("Spouse caregivers in the early stage");
+    expect(applicant?.meetingTimeLabel).toBeUndefined();
+  });
+
+  it("composes meetingTimeLabel from availability_windows and time_zone when both are present", async () => {
+    const { data: applicantRow, error } = await admin
+      .from("applicants")
+      .insert({
+        partner_organization_id: (
+          await admin.from("partner_organizations").select("id").eq("name", "Riverside Health Network").single()
+        ).data!.id,
+        referral_source: "partner_link",
+        first_name: "Nadia",
+        last_name: "Reyes",
+        email: `l4-waitlist-test-${Date.now()}@example.com`,
+        status: "pending_review",
+        relationship: "Sibling",
+        care_recipient_stage: "unsure",
+        availability_windows: ["weekday_evenings", "weekends"],
+        time_zone: "America/Chicago",
+      })
+      .select("id")
+      .single();
+    if (error || !applicantRow) throw error ?? new Error("failed to create applicant");
+
+    try {
+      const applicant = await getApplicant(applicantRow.id, admin);
+      // stage "unsure" - no stage clause, same as the intake form's own
+      // treatment of it as "no answer given" rather than a real stage.
+      expect(applicant?.waitlistGroupingLabel).toBe("Sibling caregivers");
+      expect(applicant?.meetingTimeLabel).toBe("Weekday evenings, Weekends Central");
+    } finally {
+      await admin.from("applicants").delete().eq("id", applicantRow.id);
+    }
+  });
+
   it("returns a real assigned session for an enrolled applicant", async () => {
     const applicant = await getApplicant("88888888-0000-0000-0000-000000000502", admin);
     expect(applicant?.status).toBe("enrolled");
@@ -317,6 +362,50 @@ describe("getApplicant (L4, against the real seeded rows in supabase/seed.sql)",
   it("returns completed status for a completed applicant", async () => {
     const applicant = await getApplicant("88888888-0000-0000-0000-000000000503", admin);
     expect(applicant?.status).toBe("completed");
+    // No assertion on nextProgramName here, deliberately - "no other
+    // licensed program exists" isn't reliably true in this shared,
+    // concurrently-run test database (many OTHER test files commit their
+    // own real license_status: 'licensed' program rows for the duration
+    // of their own beforeAll/afterAll lifecycle - the same shared-mutable-
+    // global-table shape already found and fixed once for consent_documents
+    // in lib/consent/data.test.ts). The dedicated test below proves the
+    // real behavior without depending on being the only licensed program
+    // in the database at that instant.
+  });
+
+  // L4 audit gap-closure: the "if there's a next program, offer it" half
+  // of Program Complete was never built at all - this is real coverage
+  // for it, not just a dormant-forever code path. A second real licensed
+  // program is required to observe this; seed.sql deliberately keeps
+  // every program unlicensed (see the X2 seed comment), so this fixture
+  // creates its own rather than changing shared seed data. Asserts
+  // truthy, not an exact name - many other test files also commit their
+  // own real licensed programs for their own file's runtime, so this
+  // can't assume it's the only one alive, only that SOME real program
+  // came back rather than the no-next-program branch.
+  it("offers some real other licensed program once one exists, rather than the no-next-program branch", async () => {
+    const { data: licensedProgram, error: programError } = await admin
+      .from("programs")
+      .insert({
+        name: "L4 Test Program (licensed)",
+        developer: "Test Developer",
+        session_count: 4,
+        session_duration_minutes: 90,
+        delivery_formats: ["video"],
+        languages: ["English"],
+        facilitator_qualification: "Lay leader",
+        license_status: "licensed",
+      })
+      .select("id")
+      .single();
+    if (programError || !licensedProgram) throw programError ?? new Error("failed to create program");
+
+    try {
+      const applicant = await getApplicant("88888888-0000-0000-0000-000000000503", admin);
+      expect(applicant?.nextProgramName).toBeTruthy();
+    } finally {
+      await admin.from("programs").delete().eq("id", licensedProgram.id);
+    }
   });
 });
 
