@@ -1,0 +1,16 @@
+-- L3 audit gap-closure: the run doc's own acceptance line requires a
+-- version bump to prompt re-consent "showing what changed, in plain
+-- language, at the top" - the re-consent PROMPT itself already works
+-- (needs_reconsent() correctly flags a member whose consent is for an
+-- older version), but there was nowhere to store what actually changed
+-- between versions, so the re-consent screen had nothing to show.
+--
+-- Nullable, not required: version 1 of every document (the only version
+-- that exists today) has nothing to summarize a change against - this
+-- column only gets populated starting with whichever version first
+-- bumps an existing document. Same placeholder-until-Ivan convention as
+-- consent_documents.body/is_placeholder themselves (see this table's own
+-- migration comment) - a future real version bump gets real placeholder
+-- text here too, pending Ivan's attorney-reviewed change description,
+-- not invented copy.
+alter table consent_documents add column change_summary text;
