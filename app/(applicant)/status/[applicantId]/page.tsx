@@ -107,14 +107,18 @@ function AssignedBeforeSessionOne({ applicant }: { applicant: Applicant }) {
 }
 
 function ProgramComplete({ applicant }: { applicant: Applicant }) {
+  const body = applicant.nextProgramName
+    ? format(COPY.applicant.complete.body_with_next, {
+        program: applicant.completedProgramName ?? "",
+        nextProgram: applicant.nextProgramName,
+      })
+    : format(COPY.applicant.complete.body_no_next, {
+        program: applicant.completedProgramName ?? "",
+      });
+
   return (
     <Card>
-      <EmptyState
-        headline={COPY.applicant.complete.headline}
-        body={format(COPY.applicant.complete.body_no_next, {
-          program: applicant.completedProgramName ?? "",
-        })}
-      />
+      <EmptyState headline={COPY.applicant.complete.headline} body={body} />
     </Card>
   );
 }

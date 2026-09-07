@@ -17,6 +17,11 @@ jobs:
       - run: npm ci
       - run: npm run lint
       - run: npm run typecheck
+      # R1's own acceptance line ("grep for undecided migrations returns
+      # zero") - see docs/migration-rollback-decisions.md and this script's
+      # own header for why the decision lives in a separate tracked file
+      # rather than inside the migration files themselves.
+      - run: npm run check:migration-rollback-decisions
       - uses: supabase/setup-cli@v1
         with:
           version: latest

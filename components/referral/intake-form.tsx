@@ -11,9 +11,9 @@ import { completeIntake, saveIntakeProgress, type IntakeFieldsUpdate } from "@/l
 import type { SafeApplicantFields } from "@/lib/referral/data";
 
 const STAGE_OPTIONS = [
-  { value: "early", label: "Early" },
-  { value: "middle", label: "Middle" },
-  { value: "late", label: "Late" },
+  { value: "early", label: COPY.referral.stage_option.early },
+  { value: "middle", label: COPY.referral.stage_option.middle },
+  { value: "late", label: COPY.referral.stage_option.late },
   { value: "unsure", label: COPY.referral.field.stage_unsure },
 ];
 

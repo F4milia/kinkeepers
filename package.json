@@ -12,7 +12,8 @@
     "test:e2e": "playwright test",
     "db:start": "npx supabase start",
     "db:reset": "npx supabase db reset",
-    "db:reset:staging": "npx supabase db reset --linked"
+    "db:reset:staging": "npx supabase db reset --linked",
+    "check:migration-rollback-decisions": "node scripts/check-migration-rollback-decisions.mjs"
   },
   "dependencies": {
     "@sentry/nextjs": "^10.71.0",
