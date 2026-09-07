@@ -7,7 +7,16 @@ import {
 } from "@/lib/messaging/applicant-notifications";
 import { notifyMember } from "@/lib/messaging/notify-member";
 
-vi.mock("@/lib/messaging/notify-member", () => ({ notifyMember: vi.fn().mockResolvedValue(undefined) }));
+// getApplicantContact moved into notify-member.ts (2026-09-05 P4
+// gap-closure, shared with the new missed-session follow-up) - kept as
+// its REAL implementation here via importOriginal, same as before the
+// move, since these tests rely on it hitting the real test DB for a
+// real applicant row. Only notifyMember itself is mocked, to inspect
+// what would have been sent without a real send.
+vi.mock("@/lib/messaging/notify-member", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/messaging/notify-member")>();
+  return { ...actual, notifyMember: vi.fn().mockResolvedValue(undefined) };
+});
 
 beforeEach(() => {
   vi.clearAllMocks();

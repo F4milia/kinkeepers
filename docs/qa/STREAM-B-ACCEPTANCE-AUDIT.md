@@ -154,6 +154,26 @@ creates an admin queue item."*
 | 4 | Deletion request creates an admin queue item | ✅ PASS | Real DB-backed test proves `member_data_requests` create/read/status-update all work end to end. |
 
 **P6 is closed** on its own literal acceptance line. One adjacent, real gap was found and confirmed live while testing item 1's lifecycle question, but it belongs to **L3's** acceptance criteria, not P6's — P6's own text never mentions cohort-assignment timing, that requirement is L3's ("Presented at enrollment, after cohort assignment, before the first session"). Recorded under L3's entry below rather than counted against P6.
+## L2: Referral landing and intake — reviewed with Ferenz 2026-09-05
+
+Acceptance (verbatim): *"partner-scoped link attributes referral source
+correctly. Partial intake resumes after a closed tab and after a device
+change on the same email. Back navigation preserves everything. 'I'm not
+sure' is selectable for stage. Three steps, ten fields, no prohibited
+fields collected. AAA contrast, 48px targets, keyboard operable."*
+
+| # | Criterion | Status | Evidence |
+|---|---|---|---|
+| 1 | Partner-scoped link attributes referral source correctly | ✅ PASS | Real test against a real admin Supabase client. |
+| 2 | Partial intake resumes after a closed tab and after a device change | 🔧 FIXED (real gap found and closed) | Mechanism is real and DB-backed (`resume_token`, not localStorage) - genuinely device-independent. But `sendResumeEmail()` had the exact same staging-guard gap already found and fixed in `lib/auth/actions.ts` - zero `assertOutboundMessageAllowed()` check, meaning any real email typed into intake would have received a real resume link on staging, unconditionally. Fixed in PR #142. Confirmed live end to end: Ferenz filled out a fresh throwaway staging preview's intake step 1 with `ferenz@brandlamb.com` (the allowlisted address) and received the real "Continue your KinKeepers application" email with a working resume link. |
+| 3 | Back navigation preserves everything | ✅ PASS | Field state independent of `step`; Back only changes the step. |
+| 4 | "I'm not sure" is selectable for stage | ✅ PASS | Genuinely wired - `"unsure"` is a first-class DB enum value. |
+| 5 | Three steps, ten fields, no prohibited fields collected | ✅ PASS | Exactly 3 steps, 9 fields. Grep for diagnosis/medications/care recipient's name/DOB actually run - zero hits. |
+| 6 | AAA contrast, 48px targets, keyboard operable | ✅ PASS (spot check) | Shared components throughout. |
+
+**Also found along the way:** the "main"-branch Vercel git alias (`kinkeepers-git-main-...`) looks like a stable staging preview but is actually a **production**-targeted build (every push to `main` deploys to Production in this project's config) - it shares production's Supabase project and has none of staging's seed data. Corrected mid-session: for any future live test needing a genuine staging-connected preview, use an actual open PR's own branch preview (or a fresh throwaway branch off `main`, deleted after use), never the `main` alias.
+
+**L2 is fully closed.**
 
 ---
 
@@ -168,6 +188,10 @@ confirmed yet, so treat every line as "to verify," not "done."
 ### L2: Referral landing and intake
 - Partner-scoped referral attribution, back-navigation, "I'm not sure," 3 steps/9 fields, no prohibited fields — PASS.
 - Cross-device resume (via emailed resume link, not localStorage) — mechanism is real and correctly DB-backed, but `send-resume-email.ts` carries a stale comment claiming `RESEND_API_KEY` was "never configured," contradicted elsewhere in the codebase. No test confirms a real send occurs.
+### P6: Consent and legal surfaces
+- Version bump preserves prior record, consent history retrievable, deletion request creates admin queue item — PASS.
+- **`member_consents.ip_hash` column exists but is never populated** — `recordConsent()` never wires it in, despite the acceptance text explicitly requiring "from what IP hash," and a working `hashRequestIp()` helper already used elsewhere in the codebase.
+- Whether consent is presented at the *correct lifecycle moment* (not just that `/consent` is reachable) is NEEDS-LIVE-VERIFICATION.
 
 ### L3: Consent, preferences, and account
 - Four consents with own checkboxes, preference-takes-effect-on-next-reminder, deletion/export on-screen confirmation, confidentiality line on discussion screen — PASS.

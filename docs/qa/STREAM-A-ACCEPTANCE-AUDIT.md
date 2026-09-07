@@ -22,7 +22,7 @@ decided scope cut - not a gap)
 Order matches the run doc's own wave order for Stream A: P1, P2, A1, A2, A3,
 P4-pre, P4, P5, A5, L5, X4, R1.
 
-A3 done as of 2026-09-05. P4-pre done as of 2026-09-05. Remaining: P4, P5, A5, L5, X4, R1.
+A3 done as of 2026-09-05. P4-pre done as of 2026-09-05. P4 done as of 2026-09-05 (required a 3-PR gap-closure, not just a fix). P5 done as of 2026-09-07. Remaining: A5, L5, X4, R1.
 
 ---
 
@@ -161,3 +161,64 @@ No literal "Acceptance:" line - this is a standalone, migration-only session ("S
 | 2 | Default both | 🔧 FIXED | Real, current, deliberately-built contradiction: the original migration never set a default on the column, and the intake form's own step-3 contact-preference control is optional - nothing requires a caregiver to touch it before completing intake, and the initial applicant-insert (`lib/referral/actions.ts`) never sets this field at all. Any applicant who never touches that control got `NULL`, not `'both'`. Worse, `lib/messaging/notify-member.ts` then treated that `NULL` as **"email only"** - a documented, deliberate design decision with its own passing test ("defaults to email only when no preference was ever recorded"), directly contradicting both P4-pre's own spec ("Default both") and P4's own body text ("Default to both for the first cohort - we will learn what works"). `supabase/seed.sql`'s fixtures always set this column explicitly, which is why no click-through against seed data ever surfaced it. Fixed with a new migration (`20260905140000_default_contact_channel_both.sql`: sets the column default to `'both'`, backfills existing `NULL` rows, and adds `NOT NULL` so the gap can't recur), plus updated `notify-member.ts`'s defensive null-handling to match the documented default instead of silently diverging from it, and corrected the test that had encoded the wrong behavior (now "defaults to both channels when no preference was ever recorded"). Verified with a new pgTAP assertion (`referral_intake_schema.sql`) proving an applicant insert with no explicit preference gets `'both'` from the column's own default, not from any application-code fallback. |
 
 **Verdict: one real bug found and fixed - the column's stated default was never actually implemented at the DB level, and the application layer had been deliberately, explicitly built and tested to do the opposite of what both P4-pre and P4's own prompt text require. A real caregiver who never touched an optional radio button during intake was silently getting email-only reminders instead of the documented both-channel default.**
+
+---
+
+## P4: Reminders — audited 2026-09-05, gap-closure required
+
+Acceptance (verbatim): *"reminders fire at the right local times for
+members in different zones. Duplicate job runs send once. Missed-session
+message fires only on a confirmed absence, not an unmarked one. Failed
+sends surface in an admin view (A5 renders the queue). Unsubscribe stops
+delivery without removing enrollment."*
+
+**Before any fix, none of these atoms could be evaluated as PASS or FAIL
+in the ordinary sense - P4's own defining feature, the 24-hours-before /
+1-hour-before / missed-session-follow-up schedule, did not exist
+anywhere in the codebase.** Every merged P4 PR (`git log`: "generic
+outbound-message send mechanism," "wire up Inngest, previously entirely
+absent," "session reschedule/cancellation member notifications,"
+"per-member timezone," "notification dedup log, admin failure queue, and
+unsubscribe") built solid, well-tested infrastructure for a DIFFERENT
+feature - A3's reschedule/cancellation notifications - instead of the
+reminder schedule P4 itself was scoped to deliver. `lib/inngest/
+functions/` contained only a `ping.ts` scaffold explicitly marked "not
+wired to any real trigger"; nothing referenced "24 hour," "1 hour," or
+queried `session_attendance` for a missed-session trigger anywhere.
+Confirmed independently (not just from a research pass) via direct grep
+and `git log --all` across every `p4-*` branch.
+
+Built the missing feature as a 3-PR gap-closure, matching the size of a
+real session rather than a quick fix:
+
+| # | Criterion | Status | Evidence |
+|---|---|---|---|
+| 1 | Reminders fire at the right local times for members in different zones | 🔧 FIXED | PR1 (#146) added `sessions_due_for_time_reminder(p_window)`, a cron-polled "what's due right now" query; PR2 (#147) added `notifySessionReminder()`, reusing the already-proven `describeInstantForMember` "say both zones" rendering (the same function A3/P4's existing reschedule notifications use, with its own Honolulu/Eastern named-edge-case test). |
+| 2 | Duplicate job runs send once | ✅ PASS (mechanism already existed, now actually exercised) | `notification_log`'s real unique `(dedup_key, channel)` index (already proven for reschedule/cancellation) - PR3's own integration test (`lib/inngest/functions/session-reminders.test.ts`) proves a second real tick against the same due session sends zero additional messages, not just that dedup exists in the abstract. |
+| 3 | Missed-session message fires only on a confirmed absence, not an unmarked one | 🔧 FIXED | PR1 added `applicants_due_for_missed_session_followup()`, gated by an inner join to `session_attendance` (`status in ('absent','excused')`) - an applicant with no attendance row at all (unmarked) structurally cannot appear in the result set. pgTAP proves this directly (`reminder_due_queries.sql`: "an unmarked... applicant is excluded - confirmed, not assumed"). Fires the calendar day after the session, 8-11am in the cohort's own zone (Postgres `at time zone` date/hour math, not JS). |
+| 4 | Failed sends surface in an admin view (A5 renders the queue) | ✅ PASS (unchanged, already correct) | `lib/admin/notifications.ts`'s `listFailedNotifications()` / `/admin/notifications` reads `notification_log` by `status = 'failed'` regardless of `notification_type` - the new reminder/missed-session types appear there automatically, no changes needed. |
+| 5 | Unsubscribe stops delivery without removing enrollment | ✅ PASS (unchanged, already correct) | The new functions reuse `listEnrolledMembers`'s `notifications_opted_out = false` filter and `getApplicantContact`'s equivalent single-applicant check - an opted-out applicant simply never appears as a recipient, same proven mechanism as every other message type. |
+
+**Also verified beyond the literal acceptance line (the prompt's own SCHEDULE section):** exactly three message types exist (24h, 1h, missed-session-next-morning) - no sequence, nurture flow, or re-engagement campaign was built, matching "do not build a sequence... these are people in crisis, not leads." Copy uses the run doc's own quoted sample text verbatim ("Your KinKeepers session starts in 1 hour..." / "We missed you Tuesday. The group meets again next week at the same time.") with no health information, no guilt/urgency/streak language, no question demanding a reply - each condition has its own vitest assertion, not just a manual read-through.
+
+**Verdict: P4's own defining feature was never built - three merged infrastructure-only PRs shipped adjacent functionality (A3's reschedule/cancellation notifications) instead. Closed with a 3-PR gap-closure (PR1 #146 schema, PR2 #147 messaging, PR3 the Inngest wiring itself) matching the size of the missing work, not a quick patch. Every literal acceptance atom and every SCHEDULE-section requirement is now real, tested code - not assumed from adjacent, similar-sounding infrastructure.**
+
+---
+
+## P5: Instrumentation — audited 2026-09-07
+
+Acceptance (verbatim): *"every event fires from its real trigger,
+verified by walking a seeded cohort through six sessions.
+retention_at_session_6 returns a correct number against known seed data.
+Grep confirms no analytics SDK exists in the codebase."*
+
+| # | Criterion | Status | Evidence |
+|---|---|---|---|
+| 1 | Every event fires from its real trigger | ✅ PASS (improved since original session, correctly) | `member_enrolled` (`assign_applicant_to_cohort`), `cohort_completed` (`mark_cohort_completed`), `member_dropped` (`withdraw_applicant`) were real from P5's own original PR. `session_attended`/`session_missed` had NO real trigger when P5 first shipped (X4, attendance tracking, didn't exist yet - confirmed with Ferenz at the time, per the migration's own header) but gained one once X4 built `submit_session_log()` (`20260902110000`), which this repo's own 2026-09-02 Learned Constraints entry already fixed a stale-event bug in. `post_created` still has no real trigger - no posts/discussion table exists anywhere in the codebase (confirmed again during this audit: `getPosts()` in `lib/data.ts` remains an explicitly "honest not-yet-available state"), because no session anywhere in the run doc ever builds a real discussion backend - a deliberate, Ferenz-confirmed scope boundary from P5's own original session, not a P5 gap. |
+| 2 | Verified by walking a seeded cohort through six sessions | 🔧 FIXED (test-coverage gap) | No test ever actually did this. `analytics_events.sql`'s own pgTAP coverage of `retention_at_session_3/6` seeded SYNTHETIC `analytics_events` rows directly (accurate and honest at the time, since no real trigger existed yet) - a genuinely different claim from "the real trigger, walked through six real sessions, produces the right number." `session_attendance.sql` exercises the real `submit_session_log()` trigger but only for session 1, proving the stale-event-correction fix, not a full six-session retention walk. Added `retention_six_session_walkthrough.sql`: four real applicants, six real sessions, six real `submit_session_log()` calls with a staggered drop-off (two stay the whole time, one drops after session 3, one drops after session 2), proving `retention_at_session_3` = 75% and `retention_at_session_6` = 50% against the REAL trigger path, not a synthetic shortcut. |
+| 3 | retention_at_session_6 returns a correct number against known seed data | ✅ PASS (now proven against real trigger data too, not just synthetic) | Same new test as above - 50%, matching the staggered-drop-off fixture exactly. |
+| 4 | Grep confirms no analytics SDK exists in the codebase | ✅ PASS | Clean grep across `package.json`, `lib/`, `app/`, `components/` for mixpanel/amplitude/posthog/segment/google-analytics/gtag - no hits. |
+
+**Also verified beyond the literal acceptance line (the DERIVED VIEWS list):** all six named views/functions exist (`attendance_rate_by_session_number`, `retention_at_session_3`, `retention_at_session_6`, `engagement_rate`, `referral_conversion`, `cohort_fill_time`), built as views/functions per the prompt's own "not a dashboard" instruction - no admin screen was added for these, correctly. `engagement_rate` remains structurally correct but permanently empty pending a real posts backend that no session in the run doc builds - same deliberate scope boundary as atom 1's `post_created` finding, not re-flagged separately.
+
+**Verdict: one real test-coverage gap found and closed - the acceptance line's own specific verification method ("walking a seeded cohort through six sessions") had never actually been built, only approximated via synthetic event rows for two arbitrary session numbers. The underlying triggers, views, and no-SDK requirement were already correct; `post_created`/`engagement_rate` staying unbuilt is a confirmed, deliberate, still-valid scope boundary from P5's own original session, not a gap.**

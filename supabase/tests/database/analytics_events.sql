@@ -6,12 +6,24 @@
 -- audit_log counts scoped by a baseline delta.
 --
 -- attendance_rate_by_session_number, retention_at_session_3/6, and
--- engagement_rate have no real writer yet (session_attended/
--- session_missed/post_created - see the migration's own header comment
--- for why) - this suite seeds synthetic analytics_events rows directly
--- to verify those views' SQL is correct, which is a genuinely different
--- claim from "real product data flows into them," documented as such in
--- the PR description.
+-- engagement_rate had no real writer at all when this migration first
+-- shipped (session_attended/session_missed/post_created - see the
+-- migration's own header comment for why) - this suite's own coverage
+-- below still seeds synthetic analytics_events rows directly to verify
+-- those views' SQL in isolation, a genuinely different claim from "real
+-- product data flows into them."
+--
+-- UPDATE (2026-09-07 P5 acceptance audit): X4 later gave session_
+-- attended/session_missed a real trigger (submit_session_log(),
+-- 20260902110000) - attendance_rate_by_session_number and
+-- retention_at_session_3/6 are no longer only synthetically verified.
+-- See retention_six_session_walkthrough.sql for the real walk-through
+-- the acceptance line itself names ("verified by walking a seeded
+-- cohort through six sessions"), driven entirely by submit_session_log()
+-- calls, not this file's synthetic shortcut. Only engagement_rate
+-- (post_created) still has no real backend - no posts/discussion table
+-- exists anywhere in this codebase (confirmed again during this same
+-- audit) - so its own coverage below remains synthetic-only, correctly.
 
 begin;
 select plan(29);

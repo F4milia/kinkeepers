@@ -50,7 +50,19 @@ function asStringArray(value: unknown): string[] {
 }
 
 function initialStep(fields: SafeApplicantFields): 1 | 2 | 3 {
-  if (asStringArray(fields.availabilityWindows).length > 0 || fields.preferredContactChannel) return 3;
+  // preferredContactChannel is deliberately NOT part of this check
+  // (2026-09-05 P4 gap-closure regression fix): applicants.
+  // preferred_contact_channel is now `not null default 'both'`
+  // (20260905140000_default_contact_channel_both.sql, closing a real
+  // P4-pre gap) - so it's truthy for EVERY applicant from the moment of
+  // creation, including one who hasn't reached step 1 yet. Checking it
+  // here made every brand-new referral resume at step 3, skipping steps
+  // 1 and 2 entirely. availabilityWindows has no such default (stays an
+  // empty/null value until the caregiver actually interacts with step
+  // 3's checkboxes), so it alone is still a reliable "has this step
+  // actually been reached and completed" signal - both fields live on
+  // the same step 3 UI, so one is sufficient.
+  if (asStringArray(fields.availabilityWindows).length > 0) return 3;
   if (fields.relationship || fields.careRecipientStage || fields.timeZone) return 2;
   return 1;
 }

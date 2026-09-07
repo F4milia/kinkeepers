@@ -1,34 +1,8 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { notifyMember, type MemberContact } from "@/lib/messaging/notify-member";
+import { notifyMember, getApplicantContact } from "@/lib/messaging/notify-member";
 import { describeInstantForMember, unsubscribeLine } from "@/lib/messaging/session-notifications";
 import { COPY, format } from "@/lib/copy";
-
-interface ApplicantContactRow {
-  contact: MemberContact;
-  timeZone: string | null;
-  unsubscribeToken: string;
-}
-
-async function getApplicantContact(admin: SupabaseClient, applicantId: string): Promise<ApplicantContactRow | null> {
-  const { data, error } = await admin
-    .from("applicants")
-    .select("email, phone, preferred_contact_channel, time_zone, notification_unsubscribe_token, notifications_opted_out")
-    .eq("id", applicantId)
-    .maybeSingle();
-  if (error) throw error;
-  // Same "an opted-out member simply never appears" contract as
-  // listEnrolledMembers (session-notifications.ts) - checked explicitly
-  // here rather than in a where clause, since this looks up exactly one
-  // known applicant rather than filtering a cohort roster.
-  if (!data || data.notifications_opted_out) return null;
-
-  return {
-    contact: { email: data.email, phone: data.phone, preferredContactChannel: data.preferred_contact_channel },
-    timeZone: data.time_zone,
-    unsubscribeToken: data.notification_unsubscribe_token,
-  };
-}
 
 /**
  * X3 message 1/7: fires from lib/referral/actions.ts's completeIntake().
