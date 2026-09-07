@@ -210,3 +210,51 @@ test("L2: resuming via the intake URL directly shows previously saved answers", 
   await page.goto(intakeUrl);
   await expect(page.getByLabel("First name")).toHaveValue("Casey");
 });
+
+// L5 acceptance audit (2026-09-08): the phone number used to be
+// reachable only via the persistent SupportAffordance sheet in this
+// page's header, not inline in the session-expired error copy itself -
+// every other error state in this app puts it directly in the message.
+// This is the code path lib/auth/roles.ts's getSignedOutReason() +
+// (caregiver)/layout.tsx route a real expired session to - reached
+// directly via the query param here rather than actually expiring a
+// real session, since this test is specifically about the rendered
+// copy this PR changed, not the (already-covered-elsewhere) detection
+// logic itself.
+test("L5: the session-expired sign-in screen shows the phone number inline, not just via the support sheet", async ({
+  page,
+}) => {
+  await page.goto("/sign-in?error=session_expired");
+  await expect(page.getByText("You've been signed out")).toBeVisible();
+  // Scoped to main - the SupportAffordance sheet's own "Call ..." link
+  // is also present in the DOM (off-screen until opened), so an
+  // unscoped locator matches both and Playwright's strict mode
+  // correctly refuses to guess which one this test means.
+  await expect(page.getByRole("main").getByText(/Call 1-800-555-0142/)).toBeVisible();
+});
+
+// L5's own acceptance line: "Usable on throttled 3G." Never verified by
+// any test before this pass (confirmed by grep - no throttling/CDP
+// config existed anywhere in this repo). Chrome DevTools' own "Slow 3G"
+// preset values (400kbps down/up, 2s latency) via a real CDP session -
+// not a fixed timeout guess. Tests /sign-in specifically: it's the one
+// screen every caregiver reaches before any auth-gated fixture would be
+// needed, so it needs no seed data to be a real, honest proof point for
+// "usable on throttled 3G," even though it doesn't exhaustively cover
+// every authenticated screen.
+test("L5: sign-in remains usable on throttled 3G", async ({ page, browserName }) => {
+  test.skip(browserName !== "chromium", "CDP network emulation is Chromium-only");
+
+  const client = await page.context().newCDPSession(page);
+  await client.send("Network.enable");
+  await client.send("Network.emulateNetworkConditions", {
+    offline: false,
+    downloadThroughput: (400 * 1024) / 8,
+    uploadThroughput: (400 * 1024) / 8,
+    latency: 2000,
+  });
+
+  await page.goto("/sign-in", { timeout: 30_000 });
+  await expect(page.getByLabel(/email/i)).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByRole("button", { name: /send/i })).toBeVisible();
+});
