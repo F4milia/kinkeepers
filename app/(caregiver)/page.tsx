@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { JoinAction } from "@/components/session/join-action";
 import { DeliveryBadge } from "@/components/session/delivery-badge";
-import { DialInDetails } from "@/components/session/dial-in-details";
 import { NextSessionCacheWriter } from "@/components/session/next-session-cache-writer";
 import { Card } from "@/components/ui/card";
 import { Avatar } from "@/components/ui/avatar";
@@ -48,7 +47,6 @@ export default async function HomePage() {
           <DeliveryBadge format={upcomingSession.deliveryFormat} />
 
           <JoinAction session={upcomingSession} className="w-full" />
-          <DialInDetails dialInNumber={upcomingSession.dialInNumber} dialInPin={upcomingSession.dialInPin} />
 
           <Link
             href={`/session/${upcomingSession.id}`}
