@@ -139,6 +139,24 @@ verified by inspecting program_sessions for null titles."*
 
 ---
 
+## P6: Consent and legal surfaces — reviewed with Ferenz 2026-09-05/07
+
+Acceptance (verbatim): *"consent captured at enrollment with correct
+version. A document version bump prompts re-consent without erasing the
+prior record. Consent history retrievable per member. Deletion request
+creates an admin queue item."*
+
+| # | Criterion | Status | Evidence |
+|---|---|---|---|
+| 1 | Consent captured at enrollment with correct version | 🔧 FIXED (real gap found and closed) | `member_consents.ip_hash` — a real column the fuller VERSIONING spec text explicitly requires ("agreed_at, and from what IP hash") — was never populated by `recordConsent()`, always `NULL` on every real row. Fixed by reusing the existing `hashRequestIp()` helper (same pattern `lib/auth/log-sign-in-event.ts` already uses for the identical purpose). `document_type`/`document_version`/`agreed_at`/`member_id` were already correctly captured. |
+| 2 | Document version bump prompts re-consent without erasing the prior record | ✅ PASS | Real pgTAP assertion (`consent_and_data_requests.sql`) proves a version bump inserts a new row rather than overwriting the old one - both records remain queryable. |
+| 3 | Consent history retrievable per member | ✅ PASS | Real RLS-backed negative test: a member can read their own consent history but not another member's (`consent_and_data_requests.sql`). |
+| 4 | Deletion request creates an admin queue item | ✅ PASS | Real DB-backed test proves `member_data_requests` create/read/status-update all work end to end. |
+
+**P6 is closed** on its own literal acceptance line. One adjacent, real gap was found and confirmed live while testing item 1's lifecycle question, but it belongs to **L3's** acceptance criteria, not P6's — P6's own text never mentions cohort-assignment timing, that requirement is L3's ("Presented at enrollment, after cohort assignment, before the first session"). Recorded under L3's entry below rather than counted against P6.
+
+---
+
 ## Remaining sessions — automated first-pass findings, not yet walked through together
 
 The rest of this file is what five parallel research passes plus direct
@@ -151,14 +169,11 @@ confirmed yet, so treat every line as "to verify," not "done."
 - Partner-scoped referral attribution, back-navigation, "I'm not sure," 3 steps/9 fields, no prohibited fields — PASS.
 - Cross-device resume (via emailed resume link, not localStorage) — mechanism is real and correctly DB-backed, but `send-resume-email.ts` carries a stale comment claiming `RESEND_API_KEY` was "never configured," contradicted elsewhere in the codebase. No test confirms a real send occurs.
 
-### P6: Consent and legal surfaces
-- Version bump preserves prior record, consent history retrievable, deletion request creates admin queue item — PASS.
-- **`member_consents.ip_hash` column exists but is never populated** — `recordConsent()` never wires it in, despite the acceptance text explicitly requiring "from what IP hash," and a working `hashRequestIp()` helper already used elsewhere in the codebase.
-- Whether consent is presented at the *correct lifecycle moment* (not just that `/consent` is reachable) is NEEDS-LIVE-VERIFICATION.
-
 ### L3: Consent, preferences, and account
 - Four consents with own checkboxes, preference-takes-effect-on-next-reminder, deletion/export on-screen confirmation, confidentiality line on discussion screen — PASS.
 - **Re-consent flow never shows "what changed, in plain language, at the top"** on a version bump — a distinct requirement from the original prompt, genuinely absent from the UI and the copy deck. Needs real per-version change-summary content — a copy/product decision, not something to invent.
+- **CONFIRMED LIVE (2026-09-07), a real bug, not just a hypothesis:** L3's own acceptance line ("Presented at enrollment, after cohort assignment, before the first session") is completely unimplemented — there is no gate, redirect, or prompt anywhere that routes a newly-assigned member to `/consent`. Verified against a real staging fixture (Dana Whitfield, seeded pre-assignment): signed in before assignment, had a real admin assign her to a cohort live, signed in again — landed on the plain Home screen ("No meetings scheduled yet") with zero mention of consent. `/consent` exists and presumably works if a member navigates there directly, but nothing ever sends them there.
+- **Also found live while testing the above, a related but distinct bug:** `getViewer()` (`lib/data.ts:101`) hard-404s any signed-in member whose `applicants.cohort_id` is still null — so a real applicant who is `pending_review`/`intake_complete` and signs in before being assigned gets the flat "We couldn't find that" page, not the `/status/[applicantId]` waiting-for-review screen that already exists in the codebase (`app/(applicant)/status/[applicantId]/page.tsx`). Nothing in the normal sign-in path (`roleHomePath()` always returns `"/"` for role `member`, with no assignment check) ever routes a signed-in member there. Likely shares root cause/ownership with the consent-gate gap above (both are "what does a signed-in member without a cohort see" questions) - worth fixing together when L3 gets its full audit turn.
 
 ### L4: Waitlist and program states
 - All four states are coded and do branch on real DB status — PASS mechanically.
