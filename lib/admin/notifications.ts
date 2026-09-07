@@ -11,6 +11,14 @@ export interface FailedNotification {
   notificationType: string;
   channel: string;
   createdAt: string;
+  /**
+   * Null for a per-applicant lifecycle notification (no session to
+   * attach - see notify-member.ts's own NotifyMemberParams comment).
+   * A5's own prompt text: "Failed sends from P4: member, session,
+   * channel, error."
+   */
+  sessionLabel: string | null;
+  errorMessage: string | null;
 }
 
 /**
@@ -26,13 +34,16 @@ export async function listFailedNotifications(callerClient?: SupabaseClient): Pr
 
   const { data, error } = await admin
     .from("notification_log")
-    .select("id, notification_type, channel, created_at, applicants(email, phone)")
+    .select(
+      "id, notification_type, channel, created_at, error_message, applicants(email, phone), sessions(session_number, cohorts(name))",
+    )
     .eq("status", "failed")
     .order("created_at", { ascending: false });
   if (error) throw error;
 
   return data.map((row) => {
     const applicant = row.applicants as unknown as { email: string | null; phone: string | null } | null;
+    const session = row.sessions as unknown as { session_number: number; cohorts: { name: string } | null } | null;
     return {
       id: row.id,
       applicantEmail: applicant?.email ?? null,
@@ -40,6 +51,8 @@ export async function listFailedNotifications(callerClient?: SupabaseClient): Pr
       notificationType: row.notification_type,
       channel: row.channel,
       createdAt: row.created_at,
+      sessionLabel: session ? `${session.cohorts?.name ?? "Unknown cohort"} - Session ${session.session_number}` : null,
+      errorMessage: row.error_message,
     };
   });
 }

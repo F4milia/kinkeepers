@@ -2,6 +2,7 @@ import "server-only";
 import { Resend } from "resend";
 import { log, logError } from "@/lib/log";
 import { assertOutboundMessageAllowed } from "@/lib/messaging/staging-guard";
+import type { SendResult } from "@/lib/messaging/send-result";
 
 // Constructed lazily, inside the function that uses it, not at module
 // scope - same reasoning as lib/referral/send-resume-email.ts (a
@@ -43,11 +44,19 @@ export interface SendEmailParams {
  * treatment already used for Zoom and for this exact Resend integration
  * elsewhere in this codebase.
  *
- * Returns whether the send actually succeeded - callers that need to
- * record the outcome (P4's notification_log) rely on this; a caller
- * that doesn't care can still ignore it, same as when this returned void.
+ * Returns whether the send actually succeeded, and the real failure
+ * reason when it didn't - A5's own acceptance line requires the
+ * reminder-failures admin screen to show "member, session, channel,
+ * error," so the real reason can no longer just be logged and
+ * discarded; notify-member.ts's markNotificationResult() writes it to
+ * notification_log.error_message.
  */
-export async function sendEmail({ to, subject, html, logContext }: SendEmailParams): Promise<boolean> {
+export async function sendEmail({ to, subject, html, logContext }: SendEmailParams): Promise<SendResult> {
+  // Deliberately OUTSIDE the try below - a blocked send is a staging-
+  // safety violation, meant to throw loudly and fail the caller, not
+  // degrade into a normal-looking "failed" notification_log row that
+  // could go unnoticed (see send-email.test.ts's own "the staging guard
+  // runs first" test, which asserts this rejects, not resolves false).
   assertOutboundMessageAllowed(to);
 
   try {
@@ -60,13 +69,14 @@ export async function sendEmail({ to, subject, html, logContext }: SendEmailPara
 
     if (error) {
       logError("email_send_failed", logContext);
-      return false;
+      return { sent: false, error: error.message };
     }
 
     log("email_sent", logContext);
-    return true;
-  } catch {
+    return { sent: true };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Email send failed.";
     logError("email_send_failed", logContext);
-    return false;
+    return { sent: false, error: message };
   }
 }

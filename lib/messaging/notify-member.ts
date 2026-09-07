@@ -3,6 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { log, logError } from "@/lib/log";
 import { sendEmail } from "@/lib/messaging/send-email";
 import { sendSms } from "@/lib/messaging/send-sms";
+import type { SendResult } from "@/lib/messaging/send-result";
 
 export interface MemberContact {
   email: string | null;
@@ -32,6 +33,16 @@ export interface NotifyMemberParams {
   subject: string;
   emailHtml: string;
   smsBody: string;
+  /**
+   * Only set by callers that actually have one (session-notifications.ts's
+   * reminder/reschedule/cancellation/missed-session functions) - X3's
+   * per-applicant lifecycle messages (application received, cohort
+   * assigned, program complete) have no session to attach, and leave
+   * this undefined. A5's own acceptance line ("Failed sends from P4:
+   * member, session, channel, error") is what this exists for -
+   * notification_log.session_id (20260908100000).
+   */
+  sessionId?: string;
   /** Structured-logging fields only - see send-email.ts's SendEmailParams. */
   logContext: Record<string, string | number | boolean | null>;
 }
@@ -48,10 +59,17 @@ async function claimNotificationSlot(
   channel: "email" | "sms",
   applicantId: string,
   notificationType: string,
+  sessionId: string | undefined,
 ): Promise<string | null> {
   const { data, error } = await admin
     .from("notification_log")
-    .insert({ applicant_id: applicantId, notification_type: notificationType, channel, dedup_key: dedupKey })
+    .insert({
+      applicant_id: applicantId,
+      notification_type: notificationType,
+      channel,
+      dedup_key: dedupKey,
+      session_id: sessionId ?? null,
+    })
     .select("id")
     .single();
   if (error) {
@@ -61,10 +79,13 @@ async function claimNotificationSlot(
   return data.id;
 }
 
-async function markNotificationResult(admin: SupabaseClient, logId: string, sent: boolean): Promise<void> {
+async function markNotificationResult(admin: SupabaseClient, logId: string, result: SendResult): Promise<void> {
   const { error } = await admin
     .from("notification_log")
-    .update({ status: sent ? "sent" : "failed" })
+    .update({
+      status: result.sent ? "sent" : "failed",
+      error_message: result.sent ? null : result.error,
+    })
     .eq("id", logId);
   if (error) logError("notification_log_update_failed", { log_id: logId });
 }
@@ -75,8 +96,9 @@ async function sendOneChannel(params: {
   channel: "email" | "sms";
   applicantId: string;
   notificationType: string;
+  sessionId: string | undefined;
   logContext: Record<string, string | number | boolean | null>;
-  send: () => Promise<boolean>;
+  send: () => Promise<SendResult>;
 }): Promise<void> {
   const logId = await claimNotificationSlot(
     params.admin,
@@ -84,13 +106,14 @@ async function sendOneChannel(params: {
     params.channel,
     params.applicantId,
     params.notificationType,
+    params.sessionId,
   );
   if (!logId) {
     log("notification_deduped", { ...params.logContext, channel: params.channel });
     return;
   }
-  const sent = await params.send();
-  await markNotificationResult(params.admin, logId, sent);
+  const result = await params.send();
+  await markNotificationResult(params.admin, logId, result);
 }
 
 /**
@@ -119,6 +142,7 @@ export async function notifyMember({
   subject,
   emailHtml,
   smsBody,
+  sessionId,
   logContext,
 }: NotifyMemberParams): Promise<void> {
   const wantsEmail = contact.preferredContactChannel !== "sms";
@@ -137,6 +161,7 @@ export async function notifyMember({
         channel: "email",
         applicantId,
         notificationType,
+        sessionId,
         logContext,
         send: () => sendEmail({ to: email, subject, html: emailHtml, logContext }),
       }),
@@ -151,6 +176,7 @@ export async function notifyMember({
         channel: "sms",
         applicantId,
         notificationType,
+        sessionId,
         logContext,
         send: () => sendSms({ to: phone, body: smsBody, logContext }),
       }),
