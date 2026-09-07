@@ -22,7 +22,7 @@ decided scope cut - not a gap)
 Order matches the run doc's own wave order for Stream A: P1, P2, A1, A2, A3,
 P4-pre, P4, P5, A5, L5, X4, R1.
 
-A3 done as of 2026-09-05. P4-pre done as of 2026-09-05. P4 done as of 2026-09-05 (required a 3-PR gap-closure, not just a fix). P5 done as of 2026-09-07. A5 done as of 2026-09-08 (required a 3-PR gap-closure). Remaining: L5, X4, R1.
+A3 done as of 2026-09-05. P4-pre done as of 2026-09-05. P4 done as of 2026-09-05 (required a 3-PR gap-closure, not just a fix). P5 done as of 2026-09-07. A5 done as of 2026-09-08 (required a 3-PR gap-closure). L5 done as of 2026-09-08. Remaining: X4, R1.
 
 ---
 
@@ -256,3 +256,25 @@ more the earlier passes hadn't checked.
 | 8 | Grep confirms no path from partner routes to post content | ✅ PASS | `partner_staff` can only reach `/admin/cohorts` and `/admin/reports` (`lib/admin/nav.ts`) - grepped every file either can reach for any posts/discussion reference and found none. Not just "no linked path": no `posts`/discussion table exists anywhere in the schema at all (confirmed independently by both streams' own audits), so there is structurally nothing to reach. |
 
 **Verdict: one previously-known, previously-open gap closed (audit-log correction visibility), plus two new gaps found and closed (audit-log actor/date filtering and action-label staleness; the reminder-failures screen's missing session/error fields) - a 3-PR gap-closure (PR-A #151, PR-B #152, PR-C the error-capture/session-display wiring). Everything already fixed by earlier gap-closure rounds this project (unlogged sessions, absence flag, partner CSV export) remained intact. Consent-gap timestamps and the partner/post-content isolation were already correct.**
+
+---
+
+## L5: API integration — audited 2026-09-08
+
+Acceptance (verbatim): *"every screen renders from real endpoints with
+fixtures fully removed — grep confirms no imports from /lib/fixtures
+outside tests. All four error states reachable and recoverable. Phone
+number present in every error state. Usable on throttled 3G. Auth
+expiry mid-session recovers cleanly."*
+
+| # | Criterion | Status | Evidence |
+|---|---|---|---|
+| 1 | Every screen renders from real endpoints, fixtures fully removed | ✅ PASS | Clean grep - zero `import ... from "@/lib/fixtures"` anywhere outside test files; every hit outside tests is a comment. `getFacilitator`/`getPosts` are honest unconditional stubs (no facilitator-bio column, no posts table exist anywhere in the schema), not fixture data - confirmed by their own test ("honest not-yet-available states, never fabricated data"). |
+| 2 | All four error states reachable and recoverable | 🔧 FIXED (2 of 4 needed work) | Network (`ErrorState variant="unavailable"`) and not-found were already correct. "Server error" has its own copy in `lib/copy.ts` but is deliberately never shown as a distinct state - `lib/data-errors.ts`'s own comment explains why: Next.js strips a thrown error down to a bare digest in production, so network vs. server failures are not reliably distinguishable at the boundary, and the prompt's own body text requires the identical treatment for both anyway (apologize once, retry, phone number) - correct as built, not a gap. Auth expiry redirects to sign-in correctly, but retrying from the generic error screen was a real recovery gap - see #5. |
+| 3 | Phone number present in every error state | 🔧 FIXED | Two real, confirmed omissions: the session-expired sign-in banner had no inline phone number (only reachable via an extra tap into the persistent SupportAffordance sheet - inconsistent with the SAME page's own rate-limit error, which already puts it inline), and `(caregiver)/error.tsx`'s offline-cache fallback view (shown instead of the generic error when a next-session cache exists) had no phone number anywhere. Both fixed - verified live via a new e2e test for the sign-in case. |
+| 4 | Usable on throttled 3G | 🔧 FIXED (test-coverage gap) | Never verified by any test or tooling before this pass - confirmed by grep, no throttling/CDP config existed anywhere in the repo. Added a real e2e test using a genuine CDP session with Chrome DevTools' own "Slow 3G" preset values (400kbps down/up, 2s latency), confirming `/sign-in` - the one screen every caregiver reaches with no fixture/auth setup needed - renders its core interactive content within 20 seconds under real throttling. Passing, not just assumed. |
+| 5 | Auth expiry mid-session recovers cleanly | 🔧 FIXED | A real architectural gap: `(caregiver)/error.tsx` and `facilitator/error.tsx` both wired their retry button to Next's own `reset()` prop, which only re-renders the segment INSIDE the error boundary - never the parent layout, which is where the actual auth check (`getCurrentRole()`) lives. If a session genuinely expired mid-request (not a transient network blip), clicking retry would just re-run the same failing data fetch and fail identically, with no path to the sign-in screen's correct explanation - a real retry-loop, not a clean recovery. Fixed by changing both boundaries' retry handler to a full `window.location.reload()`, which always re-runs the layout - an actually-expired session now correctly redirects to `/sign-in?error=session_expired` on retry, while a genuine transient failure just succeeds normally (the redirect behavior itself was already proven correct by the many existing unauthenticated-redirect e2e tests, which a full reload is equivalent to). |
+
+**Also verified beyond the literal acceptance line (the prompt's own body text):** no component needed editing to consume the real data layer (`lib/data.ts`'s functions keep the same signatures every caregiver page already called) - no abstraction leakage, checked directly across four page components. No skeleton/shimmer anywhere (clean grep) - loading states are a plain `"Loading…"` text swap via the shared `Button` component's own `loading` prop, per the design system. A real, working offline cache exists for "the next session details" (`components/session/next-session-cache.ts`, plain `localStorage`, read by the error boundary and written by a client component mounted on Home) - satisfies the prompt's own specific ask, not just the literal acceptance line.
+
+**Verdict: the core data-layer swap (fixtures → real endpoints, no abstraction leakage, honest stubs for two real schema gaps) was already done correctly. Found and fixed four real gaps in the error-handling half: two missing phone numbers, one completely untested acceptance atom (3G usability, now covered by a real throttled test), and one genuine retry-loop architectural bug that could leave a member with an actually-expired session stuck seeing "check your connection" indefinitely instead of being told to sign in again.**

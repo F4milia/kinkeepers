@@ -92,7 +92,20 @@ export function SignInForm({
       <h1 className="text-h2">{sessionExpired ? COPY.errors.auth_expired.headline : COPY.sign_in.title}</h1>
 
       {sessionExpired ? (
-        <p className="text-body font-ui text-ink-soft">{COPY.errors.auth_expired.body}</p>
+        <>
+          <p className="text-body font-ui text-ink-soft">{COPY.errors.auth_expired.body}</p>
+          {/* 2026-09-08 L5 acceptance audit: the phone number used to be
+              reachable only via the persistent SupportAffordance sheet in
+              this page's header, not inline in the error copy itself -
+              every other error state (ErrorState, the rate-limited copy
+              a few lines above) puts it directly in the message. "The
+              phone number appears in every failure state" (L5's own
+              acceptance line) means inline, not one extra tap away,
+              especially for a locked-out moment like this one. */}
+          <p className="text-body font-ui text-ink-soft">
+            {format(COPY.errors.call_for_help, { phoneNumber: COPY.support.phoneNumber })}
+          </p>
+        </>
       ) : null}
 
       {showLinkInvalid ? (

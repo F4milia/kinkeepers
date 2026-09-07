@@ -19,8 +19,24 @@ import { formatSessionDay } from "@/lib/format-date";
  * what this needs: it's the one place that can read the offline
  * next-session cache and show a member on a flaky connection something
  * more useful than a bare retry button.
+ *
+ * 2026-09-08 L5 acceptance audit: retry deliberately does a full
+ * `window.location.reload()`, NOT Next's own `reset` prop. This
+ * boundary sits below (caregiver)/layout.tsx in the tree - `reset()`
+ * only re-renders what's inside THIS boundary (the page that threw),
+ * never the parent layout, which is where the actual auth check
+ * (`getCurrentRole()`) lives. If the real cause of the throw was a
+ * session that expired mid-request (not a transient network blip), a
+ * `reset()`-driven retry would just re-run the same failing data fetch
+ * and fail the same way again, with no path to the sign-in screen's
+ * correct "you've been signed out" explanation - a real, if narrow,
+ * retry-loop gap: L5's own acceptance line requires "auth expiry
+ * mid-session recovers cleanly," and a scoped reset() cannot do that. A
+ * full reload always re-runs the layout, so an actually-expired session
+ * correctly redirects to /sign-in?error=session_expired on retry,
+ * while a genuine transient failure just succeeds normally.
  */
-export default function CaregiverError({ reset }: { error: Error & { digest?: string }; reset: () => void }) {
+export default function CaregiverError() {
   const [cached, setCached] = useState<CachedNextSession | null>(null);
 
   useEffect(() => {
@@ -67,6 +83,18 @@ export default function CaregiverError({ reset }: { error: Error & { digest?: st
           </p>
         </Card>
 
+        {/* 2026-09-08 L5 acceptance audit: this offline-cache view had no
+            phone number anywhere - ErrorState (the other branch below)
+            always renders one, but this branch, being a separate
+            hand-built layout for the cached-session card, didn't inherit
+            that. "The phone number appears in every failure state" (L5's
+            own acceptance line) applies here too - this is still a
+            failure state, just one with something useful to show
+            alongside the apology. */}
+        <p className="text-meta font-ui text-ink-soft">
+          {format(COPY.errors.call_for_help, { phoneNumber: COPY.support.phoneNumber })}
+        </p>
+
         <Link href="/" className="min-h-12 text-label font-ui text-action underline underline-offset-2">
           {COPY.errors.not_found.go_home}
         </Link>
@@ -74,5 +102,5 @@ export default function CaregiverError({ reset }: { error: Error & { digest?: st
     );
   }
 
-  return <ErrorState variant="unavailable" onRetry={reset} />;
+  return <ErrorState variant="unavailable" onRetry={() => window.location.reload()} />;
 }
