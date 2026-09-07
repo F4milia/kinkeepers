@@ -28,9 +28,12 @@ project, now Preview-only) and production (`vnadfnnckmkswfrzfjkj`, wired to
 Vercel's Production environment only). A code deploy never moves data
 between them. Every open PR's preview deployment reads and writes staging;
 only the real production site reads and writes production. See CLAUDE.md's
-Architecture notes for the full cutover record, including the dashboard-only
-config (Auth URL settings, custom SMTP, admin role grants) that does NOT
-carry over automatically when a new Supabase project is provisioned.
+Architecture notes for the full cutover record, and
+`docs/supabase-cutover-checklist.md` for the four dashboard-only settings
+(Auth URL Configuration, admin role grant, custom SMTP, session inactivity
+timeout) that do NOT carry over automatically when a new Supabase project
+is provisioned - run through that checklist explicitly the next time this
+repo points at a new project.
 
 **One-command reset:** `npm run db:reset` (local Docker stack) or
 `npm run db:reset:staging` (the linked hosted project — requires
