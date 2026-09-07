@@ -22,7 +22,7 @@ decided scope cut - not a gap)
 Order matches the run doc's own wave order for Stream A: P1, P2, A1, A2, A3,
 P4-pre, P4, P5, A5, L5, X4, R1.
 
-A3 done as of 2026-09-05. P4-pre done as of 2026-09-05. P4 done as of 2026-09-05 (required a 3-PR gap-closure, not just a fix). P5 done as of 2026-09-07. Remaining: A5, L5, X4, R1.
+A3 done as of 2026-09-05. P4-pre done as of 2026-09-05. P4 done as of 2026-09-05 (required a 3-PR gap-closure, not just a fix). P5 done as of 2026-09-07. A5 done as of 2026-09-08 (required a 3-PR gap-closure). L5 done as of 2026-09-08. Remaining: X4, R1.
 
 ---
 
@@ -222,3 +222,59 @@ Grep confirms no analytics SDK exists in the codebase."*
 **Also verified beyond the literal acceptance line (the DERIVED VIEWS list):** all six named views/functions exist (`attendance_rate_by_session_number`, `retention_at_session_3`, `retention_at_session_6`, `engagement_rate`, `referral_conversion`, `cohort_fill_time`), built as views/functions per the prompt's own "not a dashboard" instruction - no admin screen was added for these, correctly. `engagement_rate` remains structurally correct but permanently empty pending a real posts backend that no session in the run doc builds - same deliberate scope boundary as atom 1's `post_created` finding, not re-flagged separately.
 
 **Verdict: one real test-coverage gap found and closed - the acceptance line's own specific verification method ("walking a seeded cohort through six sessions") had never actually been built, only approximated via synthetic event rows for two arbitrary session numbers. The underlying triggers, views, and no-SDK requirement were already correct; `post_created`/`engagement_rate` staying unbuilt is a confirmed, deliberate, still-valid scope boundary from P5's own original session, not a gap.**
+
+---
+
+## A5: Oversight and queues — audited 2026-09-08, gap-closure required
+
+Acceptance (verbatim): *"unlogged past sessions surface. Two-consecutive-
+absence flag accurate. Attendance corrections preserve prior values and
+write audit rows. Reminder failures visible. Consent gaps and deletion
+requests queued with timestamps. Audit log filterable and legible to an
+outsider. Partner export scoped correctly and carrying
+partner_reference_id, and grep confirms no path from partner routes to
+post content."*
+
+A5 had already been through two rounds of gap-closure earlier this
+project (CLAUDE.md's 2026-09-03 entries: unlogged-sessions/absence-flag
+built, the partner CSV export built, a production `Intl.DateTimeFormat`
+crash fixed) - one item was explicitly left open at that time: the
+write-side of attendance corrections was proven correct at the DB level,
+but the admin UI couldn't show a human the before/after values. Re-
+verifying the full line found that gap was real and still open, plus two
+more the earlier passes hadn't checked.
+
+| # | Criterion | Status | Evidence |
+|---|---|---|---|
+| 1 | Unlogged past sessions surface | ✅ PASS (already fixed, confirmed still intact) | `getUnloggedPastSessions()` still defined and called from `app/admin/reports/page.tsx`. |
+| 2 | Two-consecutive-absence flag accurate | ✅ PASS (already fixed, confirmed still intact) | `getConsecutiveAbsenceFlags()`, same file, same status. |
+| 3 | Attendance corrections preserve prior values and write audit rows | 🔧 FIXED | The write side was already correct (X4's `submit_session_log()` writes `{is_correction, attendance_changes: [{applicant_id, previous_status, new_status}]}` into `audit_log.metadata`) - but `lib/admin/audit-log.ts` never selected `metadata` at all, so the admin UI structurally could not show it. Fixed (PR-A, #151): select and render it - a correction now visibly shows "applicant: previous → new," verified live. |
+| 4 | Reminder failures visible | 🔧 FIXED | A5's own prompt text names the required fields explicitly: "member, session, channel, error." Only 2 of 4 existed - `notification_log` had no session-identifying column at all (only a substring buried inside `dedup_key`, never parsed back out), and `error_message` was a real column nothing ever populated (`sendEmail`/`sendSms` discarded the real failure reason right after logging it). Fixed with PR-B (#152, migration adding `session_id`) and PR-C (real error capture via a new `SendResult` return contract, `sessionId` threaded from every session-scoped caller) - verified live that a real failed send now shows a real cohort/session label and the real error text. |
+| 5 | Consent gaps and deletion requests queued with timestamps | ✅ PASS | Deletion/export requests (`listDataRequests()`) have real `requested_at`/`fulfilled_at` timestamp columns, rendered on `/admin/data-requests`. Consent gaps deliberately have no timestamp, by design (`admin_list_consent_gaps()`'s own comment: "a gap is a current state, not a timestamped event") - matches the prompt's own body text, which attaches "request date, status, fulfillment record" only to deletion/export requests, not to consent gaps. Not a gap. |
+| 6 | Audit log filterable and legible to an outsider | 🔧 FIXED | Only 2 of the 4 named filter dimensions existed (subject type via dropdown, action via free-text exact-match requiring an internal enum string) - actor and date had no filter support at all. Fixed (PR-A): added actor (partial email match) and date-range filters, and converted the action filter to a labeled dropdown. Also found and fixed: three real, currently-firing `audit_action` values (`facilitator_certified`, `applicant_withdrawn`, `session_log_submitted`) had no plain-English label, falling back to raw de-slugged enum text - exactly the staleness this file's own header comment warns about. |
+| 7 | Partner export scoped correctly, carries partner_reference_id | ✅ PASS (already fixed, confirmed still intact) | `getPartnerAttendanceExportRows()` (`lib/admin/reports.ts`) selects and exports `partner_reference_id` as its own CSV column, wired through `/admin/reports/export`. |
+| 8 | Grep confirms no path from partner routes to post content | ✅ PASS | `partner_staff` can only reach `/admin/cohorts` and `/admin/reports` (`lib/admin/nav.ts`) - grepped every file either can reach for any posts/discussion reference and found none. Not just "no linked path": no `posts`/discussion table exists anywhere in the schema at all (confirmed independently by both streams' own audits), so there is structurally nothing to reach. |
+
+**Verdict: one previously-known, previously-open gap closed (audit-log correction visibility), plus two new gaps found and closed (audit-log actor/date filtering and action-label staleness; the reminder-failures screen's missing session/error fields) - a 3-PR gap-closure (PR-A #151, PR-B #152, PR-C the error-capture/session-display wiring). Everything already fixed by earlier gap-closure rounds this project (unlogged sessions, absence flag, partner CSV export) remained intact. Consent-gap timestamps and the partner/post-content isolation were already correct.**
+
+---
+
+## L5: API integration — audited 2026-09-08
+
+Acceptance (verbatim): *"every screen renders from real endpoints with
+fixtures fully removed — grep confirms no imports from /lib/fixtures
+outside tests. All four error states reachable and recoverable. Phone
+number present in every error state. Usable on throttled 3G. Auth
+expiry mid-session recovers cleanly."*
+
+| # | Criterion | Status | Evidence |
+|---|---|---|---|
+| 1 | Every screen renders from real endpoints, fixtures fully removed | ✅ PASS | Clean grep - zero `import ... from "@/lib/fixtures"` anywhere outside test files; every hit outside tests is a comment. `getFacilitator`/`getPosts` are honest unconditional stubs (no facilitator-bio column, no posts table exist anywhere in the schema), not fixture data - confirmed by their own test ("honest not-yet-available states, never fabricated data"). |
+| 2 | All four error states reachable and recoverable | 🔧 FIXED (2 of 4 needed work) | Network (`ErrorState variant="unavailable"`) and not-found were already correct. "Server error" has its own copy in `lib/copy.ts` but is deliberately never shown as a distinct state - `lib/data-errors.ts`'s own comment explains why: Next.js strips a thrown error down to a bare digest in production, so network vs. server failures are not reliably distinguishable at the boundary, and the prompt's own body text requires the identical treatment for both anyway (apologize once, retry, phone number) - correct as built, not a gap. Auth expiry redirects to sign-in correctly, but retrying from the generic error screen was a real recovery gap - see #5. |
+| 3 | Phone number present in every error state | 🔧 FIXED | Two real, confirmed omissions: the session-expired sign-in banner had no inline phone number (only reachable via an extra tap into the persistent SupportAffordance sheet - inconsistent with the SAME page's own rate-limit error, which already puts it inline), and `(caregiver)/error.tsx`'s offline-cache fallback view (shown instead of the generic error when a next-session cache exists) had no phone number anywhere. Both fixed - verified live via a new e2e test for the sign-in case. |
+| 4 | Usable on throttled 3G | 🔧 FIXED (test-coverage gap) | Never verified by any test or tooling before this pass - confirmed by grep, no throttling/CDP config existed anywhere in the repo. Added a real e2e test using a genuine CDP session with Chrome DevTools' own "Slow 3G" preset values (400kbps down/up, 2s latency), confirming `/sign-in` - the one screen every caregiver reaches with no fixture/auth setup needed - renders its core interactive content within 20 seconds under real throttling. Passing, not just assumed. |
+| 5 | Auth expiry mid-session recovers cleanly | 🔧 FIXED | A real architectural gap: `(caregiver)/error.tsx` and `facilitator/error.tsx` both wired their retry button to Next's own `reset()` prop, which only re-renders the segment INSIDE the error boundary - never the parent layout, which is where the actual auth check (`getCurrentRole()`) lives. If a session genuinely expired mid-request (not a transient network blip), clicking retry would just re-run the same failing data fetch and fail identically, with no path to the sign-in screen's correct explanation - a real retry-loop, not a clean recovery. Fixed by changing both boundaries' retry handler to a full `window.location.reload()`, which always re-runs the layout - an actually-expired session now correctly redirects to `/sign-in?error=session_expired` on retry, while a genuine transient failure just succeeds normally (the redirect behavior itself was already proven correct by the many existing unauthenticated-redirect e2e tests, which a full reload is equivalent to). |
+
+**Also verified beyond the literal acceptance line (the prompt's own body text):** no component needed editing to consume the real data layer (`lib/data.ts`'s functions keep the same signatures every caregiver page already called) - no abstraction leakage, checked directly across four page components. No skeleton/shimmer anywhere (clean grep) - loading states are a plain `"Loading…"` text swap via the shared `Button` component's own `loading` prop, per the design system. A real, working offline cache exists for "the next session details" (`components/session/next-session-cache.ts`, plain `localStorage`, read by the error boundary and written by a client component mounted on Home) - satisfies the prompt's own specific ask, not just the literal acceptance line.
+
+**Verdict: the core data-layer swap (fixtures → real endpoints, no abstraction leakage, honest stubs for two real schema gaps) was already done correctly. Found and fixed four real gaps in the error-handling half: two missing phone numbers, one completely untested acceptance atom (3G usability, now covered by a real throttled test), and one genuine retry-loop architectural bug that could leave a member with an actually-expired session stuck seeing "check your connection" indefinitely instead of being told to sign in again.**

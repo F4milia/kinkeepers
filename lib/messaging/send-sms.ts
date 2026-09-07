@@ -2,6 +2,7 @@ import "server-only";
 import twilio from "twilio";
 import { log, logError } from "@/lib/log";
 import { assertOutboundMessageAllowed } from "@/lib/messaging/staging-guard";
+import type { SendResult } from "@/lib/messaging/send-result";
 
 // Lazily constructed, same reasoning as send-email.ts's getResendClient -
 // avoids a module-scope throw on import in any environment (every one,
@@ -30,10 +31,14 @@ export interface SendSmsParams {
  * compliance step) - same credential-gap treatment as sendEmail: log and
  * no-op rather than crash the feature that called this.
  *
- * Returns whether the send actually succeeded - see sendEmail's own
- * comment on why this matters now (notification_log needs the outcome).
+ * Returns whether the send actually succeeded, and the real failure
+ * reason when it didn't - see sendEmail's own comment on why this
+ * matters now (notification_log.error_message).
  */
-export async function sendSms({ to, body, logContext }: SendSmsParams): Promise<boolean> {
+export async function sendSms({ to, body, logContext }: SendSmsParams): Promise<SendResult> {
+  // Deliberately OUTSIDE the try below - same "the staging guard runs
+  // first, and throws" contract as sendEmail (see its own comment and
+  // this file's own "the staging guard runs first" test).
   assertOutboundMessageAllowed(to);
 
   try {
@@ -43,9 +48,10 @@ export async function sendSms({ to, body, logContext }: SendSmsParams): Promise<
     }
     await getTwilioClient().messages.create({ to, from: fromNumber, body });
     log("sms_sent", logContext);
-    return true;
-  } catch {
+    return { sent: true };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "SMS send failed.";
     logError("sms_send_failed", logContext);
-    return false;
+    return { sent: false, error: message };
   }
 }

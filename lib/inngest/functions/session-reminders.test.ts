@@ -9,8 +9,8 @@ import { sendEmail } from "@/lib/messaging/send-email";
 // notifyMember tests can't exercise. Only the actual outbound send is
 // mocked, same as notify-member.test.ts's own established pattern -
 // never a real Resend/Twilio call from a test.
-vi.mock("@/lib/messaging/send-email", () => ({ sendEmail: vi.fn().mockResolvedValue(true) }));
-vi.mock("@/lib/messaging/send-sms", () => ({ sendSms: vi.fn().mockResolvedValue(true) }));
+vi.mock("@/lib/messaging/send-email", () => ({ sendEmail: vi.fn().mockResolvedValue({ sent: true }) }));
+vi.mock("@/lib/messaging/send-sms", () => ({ sendSms: vi.fn().mockResolvedValue({ sent: true }) }));
 
 const admin = createAdminClient();
 
@@ -151,19 +151,26 @@ describe("handleSessionReminders", () => {
 
     const { data: reminderLog } = await admin
       .from("notification_log")
-      .select("id, status")
+      .select("id, status, session_id")
       .eq("applicant_id", applicantIds[0])
       .eq("notification_type", "session_reminder_24h")
       .maybeSingle();
     expect(reminderLog?.status).toBe("sent");
+    // 2026-09-08 A5 acceptance audit: proves session_id (20260908100000)
+    // carries a real, queryable session reference all the way through
+    // from a real due-session tick - not just notify-member.ts round-
+    // tripping a value it was handed (see notify-member.test.ts for that
+    // narrower unit check).
+    expect(reminderLog?.session_id).toBe(sessionIds[0]);
 
     const { data: missedLog } = await admin
       .from("notification_log")
-      .select("id, status")
+      .select("id, status, session_id")
       .eq("applicant_id", applicantIds[1])
       .eq("notification_type", "missed_session_followup")
       .maybeSingle();
     expect(missedLog?.status).toBe("sent");
+    expect(missedLog?.session_id).toBe(sessionIds[1]);
   });
 
   it("a second tick with the same due sessions doesn't send a second time - the real dedup index blocks it", async () => {

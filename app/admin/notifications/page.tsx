@@ -33,8 +33,12 @@ export default async function AdminNotificationsPage() {
                       {failure.notificationType} · {failure.applicantEmail ?? failure.applicantPhone ?? "Unknown member"}
                     </p>
                     <p className="text-meta font-ui text-ink-soft">
+                      {failure.sessionLabel ? `${failure.sessionLabel} · ` : ""}
                       {new Date(failure.createdAt).toLocaleString()}
                     </p>
+                    {failure.errorMessage ? (
+                      <p className="text-meta font-ui text-ink-soft">Error: {failure.errorMessage}</p>
+                    ) : null}
                   </div>
                   <Badge variant="gentle">{failure.channel} failed</Badge>
                 </div>
