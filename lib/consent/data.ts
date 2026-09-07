@@ -105,3 +105,25 @@ export async function getConsentStatus(callerClient?: SupabaseClient): Promise<C
     };
   });
 }
+
+/**
+ * L3 audit gap-closure: whether the signed-in member has any outstanding
+ * consent (never consented, or consented to an older version) - the
+ * check the (caregiver) layout needs to route a newly-assigned member to
+ * /consent before Home, per the run doc's own acceptance line ("Presented
+ * at enrollment, after cohort assignment, before the first session").
+ * Reuses P6's existing needs_reconsent() function rather than
+ * reimplementing the same query - false for a signed-out caller, same as
+ * getConsentStatus() above.
+ */
+export async function memberNeedsConsent(callerClient?: SupabaseClient): Promise<boolean> {
+  const supabase = callerClient ?? (await createClient());
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return false;
+
+  const { data, error } = await supabase.rpc("needs_reconsent", { check_member_id: user.id });
+  if (error) throw error;
+  return (data ?? []).length > 0;
+}

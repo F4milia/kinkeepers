@@ -5,7 +5,7 @@
 -- entirely and would pass even with the policy deleted.
 
 begin;
-select plan(16);
+select plan(17);
 
 insert into partner_organizations (id, name, referral_link_slug) values
   ('11111111-0000-0000-0000-000000000501', 'L5 Org', 'pgtap-05-org');
@@ -24,16 +24,22 @@ insert into sessions (id, cohort_id, session_number, scheduled_at) values
 -- member-a: single, unambiguous, enrolled match by email - the golden path.
 -- member-b: unclaimed auth account with no matching applicant at all.
 -- member-c: two applicant rows share the same email - ambiguous on purpose.
--- member-d: matches an applicant that's still pending_review, not enrolled -
---   must not be claimable yet.
+-- member-d: matches an applicant that's still pending_review, not
+--   enrolled - IS now claimable (L3 audit gap-closure, see this
+--   migration's own comment) - a pre-enrollment applicant needs to be
+--   claimable so a real sign-in can route them to /status/[applicantId].
 -- member-e: a second, real member in Cohort A, used to prove the roster
 --   and RLS are scoped to "this cohort", not "every applicant".
+-- member-f: matches an applicant that's declined - must still never be
+--   claimable, unlike member-d - preserves the "not everything is
+--   claimable" guarantee this widening must not lose.
 insert into auth.users (id, email) values
   ('66666666-0000-0000-0000-000000000501', '05-member-a@example.com'),
   ('66666666-0000-0000-0000-000000000502', '05-member-b@example.com'),
   ('66666666-0000-0000-0000-000000000503', '05-member-c@example.com'),
   ('66666666-0000-0000-0000-000000000504', '05-member-d@example.com'),
-  ('66666666-0000-0000-0000-000000000505', '05-member-e@example.com');
+  ('66666666-0000-0000-0000-000000000505', '05-member-e@example.com'),
+  ('66666666-0000-0000-0000-000000000506', '05-member-f@example.com');
 
 insert into applicants (id, partner_organization_id, referral_source, status, cohort_id, email, first_name, last_name) values
   ('33333333-0000-0000-0000-000000000501', '11111111-0000-0000-0000-000000000501', 'partner_link', 'enrolled', '77777777-0000-0000-0000-000000000501', '05-member-a@example.com', 'Ann', 'Alpha'),
@@ -41,7 +47,8 @@ insert into applicants (id, partner_organization_id, referral_source, status, co
   ('33333333-0000-0000-0000-000000000503', '11111111-0000-0000-0000-000000000501', 'staff_form', 'enrolled', '77777777-0000-0000-0000-000000000501', '05-member-c@example.com', 'Cara', 'Duplicate'),
   ('33333333-0000-0000-0000-000000000504', '11111111-0000-0000-0000-000000000501', 'partner_link', 'pending_review', null, '05-member-d@example.com', 'Dana', 'Delta'),
   ('33333333-0000-0000-0000-000000000505', '11111111-0000-0000-0000-000000000501', 'partner_link', 'enrolled', '77777777-0000-0000-0000-000000000501', '05-member-e@example.com', 'Elle', 'Echo'),
-  ('33333333-0000-0000-0000-000000000506', '11111111-0000-0000-0000-000000000501', 'partner_link', 'enrolled', '77777777-0000-0000-0000-000000000502', 'other-cohort@example.com', 'Otto', 'Other');
+  ('33333333-0000-0000-0000-000000000506', '11111111-0000-0000-0000-000000000501', 'partner_link', 'enrolled', '77777777-0000-0000-0000-000000000502', 'other-cohort@example.com', 'Otto', 'Other'),
+  ('33333333-0000-0000-0000-000000000507', '11111111-0000-0000-0000-000000000501', 'partner_link', 'declined', null, '05-member-f@example.com', 'Fern', 'Foxtrot');
 
 -- anon cannot call either function at all - the base grant is the deny,
 -- not a policy.
@@ -58,14 +65,26 @@ select throws_ok(
 );
 reset role;
 
--- member-d: real auth account, matching email, but the applicant row is
--- still pending_review with no cohort - not claimable yet.
+-- member-d: real auth account, matching email, applicant row is
+-- pending_review with no cohort yet - IS claimable now (L3 audit
+-- gap-closure).
 set local role authenticated;
 set local request.jwt.claims to '{"sub": "66666666-0000-0000-0000-000000000504", "role": "authenticated"}';
 select is(
   claim_applicant_for_current_user(),
+  '33333333-0000-0000-0000-000000000504'::uuid,
+  'a pending_review applicant (not yet enrolled) IS claimed by email match'
+);
+reset role;
+
+-- member-f: real auth account, matching email, but the applicant row is
+-- declined - must never be claimable, unlike member-d above.
+set local role authenticated;
+set local request.jwt.claims to '{"sub": "66666666-0000-0000-0000-000000000506", "role": "authenticated"}';
+select is(
+  claim_applicant_for_current_user(),
   null,
-  'a pending_review applicant (not yet enrolled) is not claimed by email match'
+  'a declined applicant is never claimed by email match, even though pending_review now is'
 );
 reset role;
 
