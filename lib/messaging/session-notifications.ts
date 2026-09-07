@@ -109,6 +109,7 @@ export async function notifySessionRescheduled(
         // duplicate - see the migration's own comment on this shape.
         dedupKey: `${applicantId}:session_rescheduled:${sessionId}:${newInstant.toISOString()}`,
         contact,
+        sessionId,
         subject: "KinKeepers: your meeting time has changed",
         emailHtml: `<p>Your KinKeepers meeting has a new time: ${timeDescription}.${joinLine}</p><p>Questions? Call ${COPY.support.phoneNumber}.</p>${unsubscribeLine(unsubscribeToken)}`,
         smsBody: `KinKeepers: your meeting time changed to ${timeDescription}.${joinLine} Questions? Call ${COPY.support.phoneNumber}. Reply STOP to stop texts.`,
@@ -139,6 +140,7 @@ export async function notifySessionCancelled(
         // session id alone is a safe dedup key here - no instant needed.
         dedupKey: `${applicantId}:session_cancelled:${sessionId}`,
         contact,
+        sessionId,
         subject: "KinKeepers: your meeting has been cancelled",
         emailHtml: `<p>Your KinKeepers meeting on ${timeDescription} has been cancelled.</p><p>Questions? Call ${COPY.support.phoneNumber}.</p>${unsubscribeLine(unsubscribeToken)}`,
         smsBody: `KinKeepers: your meeting on ${timeDescription} is cancelled. Questions? Call ${COPY.support.phoneNumber}. Reply STOP to stop texts.`,
@@ -186,6 +188,7 @@ export async function notifySessionReminder(
         notificationType: `session_reminder_${reminderType}`,
         dedupKey: `${applicantId}:session_reminder_${reminderType}:${sessionId}:${sessionInstant.toISOString()}`,
         contact,
+        sessionId,
         subject: `KinKeepers: your session starts in ${hoursLabel}`,
         emailHtml: `<p>Your KinKeepers session starts in ${hoursLabel}: ${timeDescription}.${joinLine}</p><p>Questions? Call ${COPY.support.phoneNumber}.</p>${unsubscribeLine(unsubscribeToken)}`,
         smsBody: `Your KinKeepers session starts in ${hoursLabel}.${joinLine} Or call ${COPY.support.phoneNumber}. Reply STOP to stop texts.`,
@@ -229,6 +232,7 @@ export async function notifyMissedSession(
     notificationType: "missed_session_followup",
     dedupKey: `${applicantId}:missed_session_followup:${sessionId}`,
     contact: applicant.contact,
+    sessionId,
     subject: "KinKeepers: we missed you",
     emailHtml: `<p>We missed you ${dayName}. The group meets again next week at the same time.</p>${unsubscribeLine(applicant.unsubscribeToken)}`,
     smsBody: `KinKeepers: we missed you ${dayName}. The group meets again next week at the same time. Reply STOP to stop texts.`,
