@@ -48,6 +48,13 @@ export function ConsentDocumentSection({ doc }: { doc: ConsentDocumentStatus }) 
         <p className="text-body font-ui text-ink">{COPY.consent.group_confidentiality_intro}</p>
       ) : null}
 
+      {doc.changeSummary ? (
+        <Card className="border-l-4 border-l-action">
+          <p className="text-label font-ui text-ink">{COPY.consent.changed_heading}</p>
+          <p className="mt-1 whitespace-pre-wrap text-body font-ui text-ink">{doc.changeSummary}</p>
+        </Card>
+      ) : null}
+
       <Card className="max-h-64 overflow-y-auto">
         <p className="whitespace-pre-wrap text-body font-ui text-ink">{doc.body}</p>
       </Card>

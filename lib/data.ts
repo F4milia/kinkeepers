@@ -26,11 +26,12 @@
  * real enrollment at all.
  */
 import "server-only";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { DataUnavailableError } from "@/lib/data-errors";
+import { memberNeedsConsent } from "@/lib/consent/data";
 import { sessionDateTimeFields, zoneFriendlyLabel } from "@/lib/session-time";
 import { computeCertificationExpiryStatus } from "@/lib/certification-status";
 import type {
@@ -95,10 +96,23 @@ async function getCurrentApplicantOrNotFound(supabase: SupabaseClient): Promise<
   return { id: data.id, cohortId: data.cohort_id, firstName: data.first_name ?? "", timeZone: data.time_zone };
 }
 
+/**
+ * L3 audit gap-closure: a signed-in member who isn't fully set up yet
+ * used to hard 404 here - either because they have no cohort_id yet (no
+ * "waiting for review" screen was ever reachable from a real sign-in,
+ * despite /status/[applicantId] already existing for exactly this state)
+ * or because they have outstanding consents (nothing routed them to
+ * /consent at all, despite the run doc's own acceptance line requiring
+ * it "after cohort assignment, before the first session"). Both are real
+ * routing states now, not 404s - every caller of getViewer() (Home,
+ * Discussion, Cohort) gets this fix for free from the one choke point,
+ * rather than needing the same check duplicated in each page.
+ */
 export async function getViewer(callerClient?: SupabaseClient): Promise<CohortMember> {
   const supabase = await resolveClient(callerClient);
   const applicant = await getCurrentApplicantOrNotFound(supabase);
-  if (!applicant.cohortId) notFound();
+  if (!applicant.cohortId) redirect(`/status/${applicant.id}`);
+  if (await memberNeedsConsent(supabase)) redirect("/consent");
   return { id: applicant.id, cohortId: applicant.cohortId, firstName: applicant.firstName, caringFor: "", role: "member" };
 }
 

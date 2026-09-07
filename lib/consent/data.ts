@@ -25,6 +25,11 @@ export interface ConsentDocumentStatus {
   isPlaceholder: boolean;
   status: "pending" | "consented";
   agreedAt: string | null;
+  // Set only when this is a re-consent (the member agreed to an OLDER
+  // version of this same document) AND the new version actually carries
+  // a change_summary - never shown on a member's first-ever consent to a
+  // document, since there's nothing to have "changed" yet.
+  changeSummary: string | null;
 }
 
 /**
@@ -53,7 +58,7 @@ export async function getConsentStatus(callerClient?: SupabaseClient): Promise<C
 
   const { data: allDocs, error: docsError } = await supabase
     .from("consent_documents")
-    .select("document_type, version, body, is_placeholder")
+    .select("document_type, version, body, is_placeholder, change_summary")
     .order("version", { ascending: false });
   if (docsError) throw docsError;
 
@@ -73,6 +78,19 @@ export async function getConsentStatus(callerClient?: SupabaseClient): Promise<C
     (myConsents ?? []).map((c) => [`${c.document_type}:${c.document_version}`, c.agreed_at as string]),
   );
 
+  // A member who has agreed to ANY older version of this document type is
+  // being re-consented, not consenting for the first time - only that
+  // case ever shows a change summary. Reduces the same myConsents rows
+  // already fetched above rather than a second query.
+  const hasOlderConsentByType = new Set<ConsentDocumentType>();
+  for (const c of myConsents ?? []) {
+    const type = c.document_type as ConsentDocumentType;
+    const currentVersion = currentByType.get(type)?.version;
+    if (currentVersion !== undefined && c.document_version < currentVersion) {
+      hasOlderConsentByType.add(type);
+    }
+  }
+
   return DOCUMENT_ORDER.filter((type) => currentByType.has(type)).map((type) => {
     const doc = currentByType.get(type)!;
     const agreedAt = agreedAtByKey.get(`${type}:${doc.version}`) ?? null;
@@ -83,6 +101,29 @@ export async function getConsentStatus(callerClient?: SupabaseClient): Promise<C
       isPlaceholder: doc.is_placeholder,
       status: agreedAt ? "consented" : "pending",
       agreedAt,
+      changeSummary: !agreedAt && hasOlderConsentByType.has(type) ? doc.change_summary : null,
     };
   });
+}
+
+/**
+ * L3 audit gap-closure: whether the signed-in member has any outstanding
+ * consent (never consented, or consented to an older version) - the
+ * check the (caregiver) layout needs to route a newly-assigned member to
+ * /consent before Home, per the run doc's own acceptance line ("Presented
+ * at enrollment, after cohort assignment, before the first session").
+ * Reuses P6's existing needs_reconsent() function rather than
+ * reimplementing the same query - false for a signed-out caller, same as
+ * getConsentStatus() above.
+ */
+export async function memberNeedsConsent(callerClient?: SupabaseClient): Promise<boolean> {
+  const supabase = callerClient ?? (await createClient());
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return false;
+
+  const { data, error } = await supabase.rpc("needs_reconsent", { check_member_id: user.id });
+  if (error) throw error;
+  return (data ?? []).length > 0;
 }
