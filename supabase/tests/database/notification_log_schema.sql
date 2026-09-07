@@ -4,15 +4,38 @@
 -- Postgres itself rejects the second attempt, not just application code.
 
 begin;
-select plan(6);
+select plan(8);
 
 insert into partner_organizations (id, name, referral_link_slug) values
   ('11111111-0000-0000-0000-0000000000a1', 'Notification Log Test Org', 'pgtap-notification-log-org');
+
+insert into programs (id, name, developer, session_count, session_duration_minutes, delivery_formats, languages, facilitator_qualification, license_status) values
+  ('99999999-0000-0000-0000-0000000000a1', 'Notification Log Test Program', 'Test Developer', 1, 90, array['video'], array['English'], 'Lay leader', 'licensed');
+
+insert into cohorts (id, name, grouping_description, capacity, cadence, meeting_day_of_week, meeting_time, time_zone, program_id) values
+  ('77777777-0000-0000-0000-0000000000a1', 'Notification Log Test Cohort', 'x', 8, 'weekly', 2, '18:30', 'America/New_York', '99999999-0000-0000-0000-0000000000a1');
+
+insert into sessions (id, cohort_id, session_number, scheduled_at) values
+  ('55555555-0000-0000-0000-0000000000a1', '77777777-0000-0000-0000-0000000000a1', 1, now() + interval '1 hour');
 
 insert into applicants (id, partner_organization_id, referral_source, status, email) values
   ('33333333-0000-0000-0000-0000000000a1', '11111111-0000-0000-0000-0000000000a1', 'partner_link', 'enrolled', 'member@example.com');
 
 set local role service_role;
+
+-- 2026-09-08 A5 gap-closure: session_id (20260908100000) - a
+-- session-scoped notification carries a real, queryable session
+-- reference now, not just a substring buried inside dedup_key.
+select lives_ok(
+  $$ insert into notification_log (applicant_id, notification_type, channel, status, dedup_key, session_id)
+     values ('33333333-0000-0000-0000-0000000000a1', 'session_reminder_24h', 'email', 'sent', 'dedup-key-session', '55555555-0000-0000-0000-0000000000a1') $$,
+  'a session-scoped notification can carry a real session_id'
+);
+select is(
+  (select session_id from notification_log where dedup_key = 'dedup-key-session'),
+  '55555555-0000-0000-0000-0000000000a1'::uuid,
+  'the stored session_id matches the real session, queryable directly - not parsed out of dedup_key'
+);
 
 select lives_ok(
   $$ insert into notification_log (applicant_id, notification_type, channel, status, dedup_key)
