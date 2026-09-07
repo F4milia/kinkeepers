@@ -15,6 +15,17 @@ describe("labelForAction", () => {
   it("falls back to a de-slugged version of an unrecognized action, never the raw enum string alone", () => {
     expect(labelForAction("some_future_action")).toBe("some future action");
   });
+
+  // 2026-09-08 A5 acceptance audit: these three real audit_action values
+  // (facilitator_certified, applicant_withdrawn added the same day as
+  // their own migrations; session_log_submitted, X4's real
+  // attendance-write action) had no label at all until this pass, always
+  // falling back to a raw de-slugged name instead of plain English.
+  it("has a real label for every non-dead audit_action value added since the original list", () => {
+    expect(labelForAction("facilitator_certified")).toBe("Facilitator certified");
+    expect(labelForAction("applicant_withdrawn")).toBe("Applicant withdrawn");
+    expect(labelForAction("session_log_submitted")).toBe("Session log submitted");
+  });
 });
 
 describe("listAuditLog", () => {
@@ -100,5 +111,42 @@ describe("listAuditLog", () => {
 
     expect(matching.some((e) => e.subjectId === orgId)).toBe(true);
     expect(nonMatching.some((e) => e.subjectId === orgId)).toBe(false);
+  });
+
+  // 2026-09-08 A5 acceptance audit: metadata was never selected at all
+  // before this pass - an attendance correction's before/after values
+  // were provably written (X4's submit_session_log()) but structurally
+  // unreachable by this function, so the admin UI could never show them.
+  it("returns the row's own metadata", async () => {
+    const adminClient = await clientForUser(adminUser.id);
+    const entries = await listAuditLog({}, adminClient);
+
+    const found = entries.find((e) => e.subjectId === orgId);
+    expect(found?.metadata).toEqual({ name: "Audit Log Test Org" });
+  });
+
+  it("filters by actorEmail, a partial case-insensitive match", async () => {
+    const adminClient = await clientForUser(adminUser.id);
+    const needle = adminUser.email!.slice(0, 10).toUpperCase();
+
+    const matching = await listAuditLog({ actorEmail: needle }, adminClient);
+    const nonMatching = await listAuditLog({ actorEmail: "definitely-nobody-real" }, adminClient);
+
+    expect(matching.some((e) => e.subjectId === orgId)).toBe(true);
+    expect(nonMatching).toEqual([]);
+  });
+
+  it("filters by a startDate/endDate range", async () => {
+    const adminClient = await clientForUser(adminUser.id);
+    const yesterday = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
+    const tomorrow = new Date(Date.now() + 86_400_000).toISOString().slice(0, 10);
+
+    const withinRange = await listAuditLog({ startDate: yesterday, endDate: tomorrow }, adminClient);
+    const beforeToday = await listAuditLog({ startDate: yesterday, endDate: yesterday }, adminClient);
+    const afterToday = await listAuditLog({ startDate: tomorrow, endDate: tomorrow }, adminClient);
+
+    expect(withinRange.some((e) => e.subjectId === orgId)).toBe(true);
+    expect(beforeToday.some((e) => e.subjectId === orgId)).toBe(false);
+    expect(afterToday.some((e) => e.subjectId === orgId)).toBe(false);
   });
 });

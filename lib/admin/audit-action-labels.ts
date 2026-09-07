@@ -8,6 +8,18 @@
 // only happen for one added after this file, before this file catches
 // up) falls back to a de-slugged version of the raw name - see
 // labelForAction - never a raw enum string on its own.
+// 2026-09-08 A5 acceptance audit: attendance_edit has never fired from
+// any real code path (confirmed by grep across every migration and
+// lib/ file) - it was defined in the original P7a migration before X4
+// built real attendance tracking, but the actual correction path X4
+// shipped (submit_session_log()) writes session_log_submitted instead,
+// distinguished as a correction only by its own metadata.is_correction
+// flag, not a separate action name. Left in this map for whenever a
+// real caller might someday use the enum value it names, but excluded
+// from AUDIT_LOG_ACTIONS below (the filter dropdown) since selecting it
+// would only ever return zero rows - a real caller listed here without
+// an entry in the actual codebase's audit_action enum usage would be a
+// dead option confusing to an outsider filtering the log.
 const ACTION_LABELS: Record<string, string> = {
   admin_sign_in_link_issued: "Admin issued a sign-in link",
   cohort_assignment: "Applicant assigned to cohort",
@@ -26,6 +38,16 @@ const ACTION_LABELS: Record<string, string> = {
   session_substitution_recorded: "Substitute facilitator recorded",
   cohort_completed: "Cohort marked completed",
   member_data_request_fulfilled: "Data request fulfilled",
+  // Three more real audit_action values existed with no label at all
+  // until this same audit pass (facilitator_certified, applicant_withdrawn
+  // - both added the same day as their own migrations - and
+  // session_log_submitted, X4's real attendance-write action), falling
+  // back to a raw de-slugged enum name instead of plain English. Exactly
+  // the maintenance-lag scenario this file's own header comment already
+  // warns about.
+  facilitator_certified: "Facilitator certified",
+  applicant_withdrawn: "Applicant withdrawn",
+  session_log_submitted: "Session log submitted",
 };
 
 export function labelForAction(action: string): string {
@@ -39,4 +61,30 @@ export const AUDIT_LOG_SUBJECT_TYPES = [
   "partner_organization",
   "member_data_request",
   "member",
+] as const;
+
+// Every REAL (non-dead) audit_action value, for the audit log's own
+// filter dropdown - "legible to an outsider" (A5's own acceptance line)
+// means picking from known plain-English options, not needing to
+// already know an internal enum string to type into a free-text box.
+export const AUDIT_LOG_ACTIONS = [
+  "admin_sign_in_link_issued",
+  "cohort_assignment",
+  "deletion_fulfillment",
+  "role_change",
+  "partner_organization_created",
+  "partner_organization_updated",
+  "applicant_assigned",
+  "applicant_declined",
+  "applicant_reopened",
+  "cohort_created",
+  "cohort_creation_failed",
+  "session_rescheduled",
+  "session_cancelled",
+  "session_substitution_recorded",
+  "cohort_completed",
+  "member_data_request_fulfilled",
+  "facilitator_certified",
+  "applicant_withdrawn",
+  "session_log_submitted",
 ] as const;
