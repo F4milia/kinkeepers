@@ -19,6 +19,33 @@ import {
 
 const admin = createAdminClient();
 
+// L3 audit gap-closure: getViewer() now redirects a member with any
+// outstanding consent to /consent rather than resolving normally - real
+// fixtures representing an already-onboarded member (able to reach Home/
+// Cohort/Discussion data) need real member_consents rows for every
+// currently-seeded document, or they'd now redirect instead of returning
+// data, which is correct behavior but not what these particular tests
+// are about.
+async function consentToAllCurrentDocuments(memberId: string): Promise<void> {
+  const { data: docs, error } = await admin.from("consent_documents").select("document_type, version");
+  if (error) throw error;
+
+  const currentByType = new Map<string, number>();
+  for (const doc of docs ?? []) {
+    const existing = currentByType.get(doc.document_type);
+    if (existing === undefined || doc.version > existing) currentByType.set(doc.document_type, doc.version);
+  }
+
+  const { error: insertError } = await admin.from("member_consents").insert(
+    Array.from(currentByType, ([document_type, document_version]) => ({
+      member_id: memberId,
+      document_type,
+      document_version,
+    })),
+  );
+  if (insertError) throw insertError;
+}
+
 describe("lib/data.ts against real endpoints (L5)", () => {
   const partnerOrgId = "11111111-0000-0000-0000-0000000d0501";
   const programId = "77777777-0000-0000-0000-0000000d0501";
@@ -97,6 +124,7 @@ describe("lib/data.ts against real endpoints (L5)", () => {
       status: "enrolled",
       cohort_id: cohortId,
     });
+    await consentToAllCurrentDocuments(memberUserId);
 
     const { data: unmatchedUser, error: unmatchedError } = await admin.auth.admin.createUser({
       email: `l5-data-test-unmatched-${Date.now()}@example.com`,
@@ -112,6 +140,12 @@ describe("lib/data.ts against real endpoints (L5)", () => {
     await admin.from("cohorts").delete().eq("id", cohortId);
     await admin.from("programs").delete().eq("id", programId);
     await admin.from("partner_organizations").delete().eq("id", partnerOrgId);
+    // member_consents.member_id references profiles(id) with no ON DELETE
+    // behavior (defaults to RESTRICT, same shape P7a's own Learned
+    // Constraints entry already found for audit_log) - deleteUser() below
+    // would fail with a foreign key violation if this row were left in
+    // place.
+    await admin.from("member_consents").delete().eq("member_id", memberUserId);
     await admin.auth.admin.deleteUser(memberUserId);
     await admin.auth.admin.deleteUser(unmatchedUserId);
   });
@@ -127,6 +161,79 @@ describe("lib/data.ts against real endpoints (L5)", () => {
   it("getViewer throws (not-found) for a signed-in account with no matching enrollment", async () => {
     const client = await clientForUser(unmatchedUserId);
     await expect(getViewer(client)).rejects.toThrow();
+  });
+
+  it("getViewer redirects to /status/[applicantId] for a member not yet assigned to a cohort", async () => {
+    const { data: user, error: userError } = await admin.auth.admin.createUser({
+      email: `l5-data-test-unassigned-${Date.now()}@example.com`,
+      email_confirm: true,
+    });
+    if (userError || !user.user) throw userError ?? new Error("createUser failed");
+
+    const { data: unassignedApplicant, error: applicantError } = await admin
+      .from("applicants")
+      .insert({
+        partner_organization_id: partnerOrgId,
+        referral_source: "partner_link",
+        first_name: "Unassigned",
+        last_name: "Applicant",
+        email: user.user.email,
+        status: "pending_review",
+      })
+      .select("id")
+      .single();
+    if (applicantError || !unassignedApplicant) throw applicantError ?? new Error("failed to create applicant");
+
+    try {
+      const client = await clientForUser(user.user.id);
+      let caughtDigest: string | undefined;
+      try {
+        await getViewer(client);
+      } catch (error) {
+        caughtDigest = (error as { digest?: string }).digest;
+      }
+      expect(caughtDigest).toContain(`/status/${unassignedApplicant.id}`);
+    } finally {
+      await admin.from("applicants").delete().eq("id", unassignedApplicant.id);
+      await admin.auth.admin.deleteUser(user.user.id);
+    }
+  });
+
+  it("getViewer redirects to /consent for an assigned member with outstanding consent", async () => {
+    const { data: user, error: userError } = await admin.auth.admin.createUser({
+      email: `l5-data-test-needs-consent-${Date.now()}@example.com`,
+      email_confirm: true,
+    });
+    if (userError || !user.user) throw userError ?? new Error("createUser failed");
+
+    const { data: needsConsentApplicant, error: applicantError } = await admin
+      .from("applicants")
+      .insert({
+        partner_organization_id: partnerOrgId,
+        referral_source: "partner_link",
+        first_name: "NeedsConsent",
+        last_name: "Member",
+        email: user.user.email,
+        status: "enrolled",
+        cohort_id: cohortId,
+      })
+      .select("id")
+      .single();
+    if (applicantError || !needsConsentApplicant) throw applicantError ?? new Error("failed to create applicant");
+
+    try {
+      const client = await clientForUser(user.user.id);
+      let caughtDigest: string | undefined;
+      try {
+        await getViewer(client);
+      } catch (error) {
+        caughtDigest = (error as { digest?: string }).digest;
+      }
+      expect(caughtDigest).toContain("/consent");
+    } finally {
+      await admin.from("applicants").delete().eq("id", needsConsentApplicant.id);
+      await admin.auth.admin.deleteUser(user.user.id);
+    }
   });
 
   it("getCohort returns real cohort fields, including the joined program name and computed session position", async () => {
@@ -594,6 +701,7 @@ describe("mapSessionStatus real-world regression - a 'scheduled' row whose time 
       .single();
     if (applicantError || !applicant) throw applicantError ?? new Error("failed to create applicant");
     applicantId = applicant.id;
+    await consentToAllCurrentDocuments(memberUserId);
   });
 
   afterAll(async () => {
@@ -602,6 +710,7 @@ describe("mapSessionStatus real-world regression - a 'scheduled' row whose time 
     await admin.from("cohorts").delete().eq("id", cohortId);
     await admin.from("programs").delete().eq("id", programId);
     await admin.from("partner_organizations").delete().eq("id", partnerOrgId);
+    await admin.from("member_consents").delete().eq("member_id", memberUserId);
     await admin.auth.admin.deleteUser(memberUserId);
   });
 

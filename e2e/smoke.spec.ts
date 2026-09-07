@@ -129,6 +129,7 @@ const CAREGIVER_ROUTES = [
   "/session/session-005",
   "/components",
   "/consent",
+  "/consent/confidentiality",
   "/facilitator",
   "/facilitator/schedule",
   "/facilitator/certifications",
