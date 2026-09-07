@@ -5,6 +5,14 @@ import { clientForUser } from "@/test/helpers/local-auth";
 import { recordConsent } from "@/lib/consent/actions";
 
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
+// hashRequestIp() calls next/headers, which throws outside a real Next.js
+// request context (same reasoning lib/auth/log-sign-in-event.test.ts
+// already documents for this exact helper) - mocked to a fixed value so
+// this suite can assert ip_hash actually lands on the row without needing
+// a real request.
+vi.mock("@/lib/auth/ip-hash", () => ({
+  hashRequestIp: vi.fn().mockResolvedValue("fake-ip-hash-for-testing"),
+}));
 
 const admin = createAdminClient();
 
@@ -52,11 +60,16 @@ describe("recordConsent", () => {
 
     const { data, error } = await admin
       .from("member_consents")
-      .select("member_id, document_type, document_version")
+      .select("member_id, document_type, document_version, ip_hash")
       .eq("member_id", memberUserId)
       .eq("document_type", "privacy_policy")
       .single();
     if (error) throw error;
-    expect(data).toEqual({ member_id: memberUserId, document_type: "privacy_policy", document_version: currentVersion });
+    expect(data).toEqual({
+      member_id: memberUserId,
+      document_type: "privacy_policy",
+      document_version: currentVersion,
+      ip_hash: "fake-ip-hash-for-testing",
+    });
   });
 });
