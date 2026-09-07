@@ -108,8 +108,13 @@ export const COPY = {
    * confirmed with Ferenz before being added here, not drafted solo.
    *
    * complete.body_with_next (the "if there's a next program, offer it"
-   * branch) is NOT here yet — that copy hasn't been confirmed, so L4 only
-   * builds the no-next-program case for now.
+   * branch) is drafted, plain functional wording, same low-risk treatment
+   * already given to other unconfirmed structural copy elsewhere in this
+   * file (e.g. P2's staff-referral screen) - NOT independently confirmed
+   * with Ferenz the way body_no_next was, and worth a real review pass
+   * before this reaches an actual completed member, since every seeded
+   * program is still unlicensed (see the X2 seed comment), so this
+   * branch has never yet been observable with real production data.
    */
   applicant: {
     waiting_review: {
@@ -129,6 +134,7 @@ export const COPY = {
     complete: {
       headline: "You've completed the program",
       body_no_next: "You've completed {program}. There's no other program open for you right now. If that changes, we'll reach out.",
+      body_with_next: "You've completed {program}. {nextProgram} is open now, if you'd like to keep going.",
     },
   },
   /**
@@ -260,6 +266,18 @@ export const COPY = {
       weekday_afternoons: "Weekday afternoons",
       weekday_evenings: "Weekday evenings",
       weekends: "Weekends",
+    },
+    // Shared with the intake form's own STAGE_OPTIONS (which previously
+    // had these as inline literals, not sourced from the copy deck) - one
+    // source, so a future wording change can't drift between the two the
+    // way P3's own time-zone labels once did (see CLAUDE.md's Learned
+    // Constraints). "unsure" stays out of this map on purpose - it's a
+    // form SELECT option (field.stage_unsure, "I'm not sure"), not a
+    // completed-sentence label anything reads back later.
+    stage_option: {
+      early: "Early",
+      middle: "Middle",
+      late: "Late",
     },
     confirmation: {
       body: "We have your information. Someone will reach out within three business days.",
