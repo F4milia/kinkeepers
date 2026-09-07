@@ -309,6 +309,11 @@ export const COPY = {
     consented_on: "Agreed {date}",
     all_done: "You're up to date on your agreements.",
     discussion_line: "What's shared here stays here.",
+    // Shown only on a re-consent (an existing member whose document
+    // version changed) - never on a first-time consent, which has
+    // nothing to summarize a change against.
+    changed_heading: "What's changed",
+    continue_to_confidentiality: "Continue",
   },
   /**
    * L3 (remaining scope): notification preferences and account. Field

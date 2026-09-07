@@ -14,6 +14,13 @@ const DOCUMENT_TYPES: ConsentDocumentType[] = [
 
 describe("getConsentStatus", () => {
   let memberUserId: string;
+  // consent_documents is real, shared, and never rolled back between test
+  // runs (this admin client writes real committed rows, same shape as the
+  // audit_log/analytics_events tables CLAUDE.md's Learned Constraints
+  // already warns about) - a hardcoded version number here collided with
+  // itself on a second run. A version far outside any real migration's
+  // range, cleaned up explicitly in afterAll, avoids that permanently.
+  const TEST_ONLY_VERSION = 900000 + Math.floor(Math.random() * 100000);
 
   beforeAll(async () => {
     const { data, error } = await admin.auth.admin.createUser({
@@ -27,6 +34,11 @@ describe("getConsentStatus", () => {
   afterAll(async () => {
     await admin.from("member_consents").delete().eq("member_id", memberUserId);
     await admin.auth.admin.deleteUser(memberUserId);
+    await admin
+      .from("consent_documents")
+      .delete()
+      .eq("document_type", "terms_of_service")
+      .eq("version", TEST_ONLY_VERSION);
   });
 
   it("returns an empty array for a signed-out caller", async () => {
@@ -78,5 +90,38 @@ describe("getConsentStatus", () => {
     for (const doc of others) {
       expect(doc.status).toBe("pending");
     }
+  });
+
+  it("shows changeSummary only on a re-consent - never on a first-time consent to a newer document", async () => {
+    // Builds on the previous test's state: memberUserId already consented
+    // to terms_of_service's version-1 (the only version that existed at
+    // the time). Bumping the version now makes that consent "older."
+    const { data: bumped, error: bumpError } = await admin
+      .from("consent_documents")
+      .insert({
+        document_type: "terms_of_service",
+        version: TEST_ONLY_VERSION,
+        body: "Updated terms of service body.",
+        is_placeholder: true,
+        change_summary: "We clarified how long we retain session recordings metadata.",
+      })
+      .select("version")
+      .single();
+    if (bumpError || !bumped) throw bumpError ?? new Error("failed to insert the test-only version");
+
+    const client = await clientForUser(memberUserId);
+    const status = await getConsentStatus(client);
+    const terms = status.find((s) => s.documentType === "terms_of_service");
+
+    expect(terms?.status).toBe("pending");
+    expect(terms?.version).toBe(TEST_ONLY_VERSION);
+    expect(terms?.changeSummary).toBe("We clarified how long we retain session recordings metadata.");
+
+    // group_confidentiality etc. were never consented at all (first-time,
+    // not a re-consent) - changeSummary must stay null even though its
+    // own document row happens to have no change_summary set either way.
+    const neverConsented = status.find((s) => s.documentType === "group_confidentiality");
+    expect(neverConsented?.status).toBe("pending");
+    expect(neverConsented?.changeSummary).toBeNull();
   });
 });

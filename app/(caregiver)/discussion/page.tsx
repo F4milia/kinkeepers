@@ -17,7 +17,10 @@ import { COPY } from "@/lib/copy";
 //
 // L3: the group confidentiality commitment stays below, unchanged - "a
 // quiet line... that links to the full agreement," so people remember
-// making it, regardless of whether the board itself is live yet.
+// making it, regardless of whether the board itself is live yet. Links to
+// its own dedicated screen (/consent/confidentiality), not a hash anchor
+// on the shared /consent page - group confidentiality no longer lives
+// there.
 export default async function DiscussionPage() {
   await getViewer();
 
@@ -28,7 +31,7 @@ export default async function DiscussionPage() {
         <EmptyState headline={COPY.discussion.title} body={COPY.errors.discussion_not_yet_available} />
       </Card>
       <Link
-        href="/consent#group_confidentiality"
+        href="/consent/confidentiality"
         className="min-h-12 text-meta font-ui text-ink-soft underline underline-offset-2"
       >
         {COPY.consent.discussion_line}
