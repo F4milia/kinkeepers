@@ -22,7 +22,7 @@ decided scope cut - not a gap)
 Order matches the run doc's own wave order for Stream A: P1, P2, A1, A2, A3,
 P4-pre, P4, P5, A5, L5, X4, R1.
 
-A3 done as of 2026-09-05. P4-pre done as of 2026-09-05. P4 done as of 2026-09-05 (required a 3-PR gap-closure, not just a fix). P5 done as of 2026-09-07. Remaining: A5, L5, X4, R1.
+A3 done as of 2026-09-05. P4-pre done as of 2026-09-05. P4 done as of 2026-09-05 (required a 3-PR gap-closure, not just a fix). P5 done as of 2026-09-07. A5 done as of 2026-09-08 (required a 3-PR gap-closure). Remaining: L5, X4, R1.
 
 ---
 
@@ -222,3 +222,37 @@ Grep confirms no analytics SDK exists in the codebase."*
 **Also verified beyond the literal acceptance line (the DERIVED VIEWS list):** all six named views/functions exist (`attendance_rate_by_session_number`, `retention_at_session_3`, `retention_at_session_6`, `engagement_rate`, `referral_conversion`, `cohort_fill_time`), built as views/functions per the prompt's own "not a dashboard" instruction - no admin screen was added for these, correctly. `engagement_rate` remains structurally correct but permanently empty pending a real posts backend that no session in the run doc builds - same deliberate scope boundary as atom 1's `post_created` finding, not re-flagged separately.
 
 **Verdict: one real test-coverage gap found and closed - the acceptance line's own specific verification method ("walking a seeded cohort through six sessions") had never actually been built, only approximated via synthetic event rows for two arbitrary session numbers. The underlying triggers, views, and no-SDK requirement were already correct; `post_created`/`engagement_rate` staying unbuilt is a confirmed, deliberate, still-valid scope boundary from P5's own original session, not a gap.**
+
+---
+
+## A5: Oversight and queues — audited 2026-09-08, gap-closure required
+
+Acceptance (verbatim): *"unlogged past sessions surface. Two-consecutive-
+absence flag accurate. Attendance corrections preserve prior values and
+write audit rows. Reminder failures visible. Consent gaps and deletion
+requests queued with timestamps. Audit log filterable and legible to an
+outsider. Partner export scoped correctly and carrying
+partner_reference_id, and grep confirms no path from partner routes to
+post content."*
+
+A5 had already been through two rounds of gap-closure earlier this
+project (CLAUDE.md's 2026-09-03 entries: unlogged-sessions/absence-flag
+built, the partner CSV export built, a production `Intl.DateTimeFormat`
+crash fixed) - one item was explicitly left open at that time: the
+write-side of attendance corrections was proven correct at the DB level,
+but the admin UI couldn't show a human the before/after values. Re-
+verifying the full line found that gap was real and still open, plus two
+more the earlier passes hadn't checked.
+
+| # | Criterion | Status | Evidence |
+|---|---|---|---|
+| 1 | Unlogged past sessions surface | ✅ PASS (already fixed, confirmed still intact) | `getUnloggedPastSessions()` still defined and called from `app/admin/reports/page.tsx`. |
+| 2 | Two-consecutive-absence flag accurate | ✅ PASS (already fixed, confirmed still intact) | `getConsecutiveAbsenceFlags()`, same file, same status. |
+| 3 | Attendance corrections preserve prior values and write audit rows | 🔧 FIXED | The write side was already correct (X4's `submit_session_log()` writes `{is_correction, attendance_changes: [{applicant_id, previous_status, new_status}]}` into `audit_log.metadata`) - but `lib/admin/audit-log.ts` never selected `metadata` at all, so the admin UI structurally could not show it. Fixed (PR-A, #151): select and render it - a correction now visibly shows "applicant: previous → new," verified live. |
+| 4 | Reminder failures visible | 🔧 FIXED | A5's own prompt text names the required fields explicitly: "member, session, channel, error." Only 2 of 4 existed - `notification_log` had no session-identifying column at all (only a substring buried inside `dedup_key`, never parsed back out), and `error_message` was a real column nothing ever populated (`sendEmail`/`sendSms` discarded the real failure reason right after logging it). Fixed with PR-B (#152, migration adding `session_id`) and PR-C (real error capture via a new `SendResult` return contract, `sessionId` threaded from every session-scoped caller) - verified live that a real failed send now shows a real cohort/session label and the real error text. |
+| 5 | Consent gaps and deletion requests queued with timestamps | ✅ PASS | Deletion/export requests (`listDataRequests()`) have real `requested_at`/`fulfilled_at` timestamp columns, rendered on `/admin/data-requests`. Consent gaps deliberately have no timestamp, by design (`admin_list_consent_gaps()`'s own comment: "a gap is a current state, not a timestamped event") - matches the prompt's own body text, which attaches "request date, status, fulfillment record" only to deletion/export requests, not to consent gaps. Not a gap. |
+| 6 | Audit log filterable and legible to an outsider | 🔧 FIXED | Only 2 of the 4 named filter dimensions existed (subject type via dropdown, action via free-text exact-match requiring an internal enum string) - actor and date had no filter support at all. Fixed (PR-A): added actor (partial email match) and date-range filters, and converted the action filter to a labeled dropdown. Also found and fixed: three real, currently-firing `audit_action` values (`facilitator_certified`, `applicant_withdrawn`, `session_log_submitted`) had no plain-English label, falling back to raw de-slugged enum text - exactly the staleness this file's own header comment warns about. |
+| 7 | Partner export scoped correctly, carries partner_reference_id | ✅ PASS (already fixed, confirmed still intact) | `getPartnerAttendanceExportRows()` (`lib/admin/reports.ts`) selects and exports `partner_reference_id` as its own CSV column, wired through `/admin/reports/export`. |
+| 8 | Grep confirms no path from partner routes to post content | ✅ PASS | `partner_staff` can only reach `/admin/cohorts` and `/admin/reports` (`lib/admin/nav.ts`) - grepped every file either can reach for any posts/discussion reference and found none. Not just "no linked path": no `posts`/discussion table exists anywhere in the schema at all (confirmed independently by both streams' own audits), so there is structurally nothing to reach. |
+
+**Verdict: one previously-known, previously-open gap closed (audit-log correction visibility), plus two new gaps found and closed (audit-log actor/date filtering and action-label staleness; the reminder-failures screen's missing session/error fields) - a 3-PR gap-closure (PR-A #151, PR-B #152, PR-C the error-capture/session-display wiring). Everything already fixed by earlier gap-closure rounds this project (unlogged sessions, absence flag, partner CSV export) remained intact. Consent-gap timestamps and the partner/post-content isolation were already correct.**
